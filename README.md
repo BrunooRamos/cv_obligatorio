@@ -1,0 +1,278 @@
+# BILP: Brightness-Invariant Local Patterns for Person Re-Identification
+
+Implementación de BILP (Brightness-Invariant Local Patterns) para Re-Identificación de Personas usando los datasets **Market-1501** e **iLIDS-VID**.
+
+## Descripción del Proyecto
+
+Este proyecto implementa un método de re-identificación de personas basado en características de bajo nivel (handcrafted features) que son invariantes a cambios de iluminación. La técnica combina:
+
+- **Color**: Log-chromaticity para invariancia a brillo
+- **Textura**: Filtros Gabor y análisis espectral (FFT)
+- **Gating adaptativo**: Fusión dinámica basada en contenido de la imagen
+
+## Datasets
+
+### Market-1501 (Single-Query)
+- **751 IDs** en train, **750 IDs** en test
+- Imágenes estáticas: **128×64 px**
+- Métricas: **CMC (Rank-1/5/10) + mAP**
+
+### iLIDS-VID (Multi-Shot)
+- **Video sequences**, 2 cámaras por ID
+- Protocolo multi-shot: pooling de frames
+- Métrica: **CMC (Rank-1/5/10)**
+
+---
+
+## Roadmap del Proyecto
+
+### Día 1 — Setup y Estructura
+**Completado:**
+- [x] Entorno Docker con dependencias (numpy, opencv, scikit-image, scipy, scikit-learn, matplotlib)
+- [x] Estructura de directorios:
+  ```
+  /data/{market1501, ilids-vid}/
+  /bilp/{color.py, texture.py, gating.py, distance.py, utils.py}
+  /eval/{loaders.py, cmc_map.py, splits.py, plots.py}
+  /scripts/{01_prepare_data.py, 02_extract_features.py, 03_eval_market.py,
+            04_eval_ilidsvid.py, 05_ablation.py}
+  ```
+- [x] Módulos BILP base creados:
+  - `bilp/color.py`: Log-chromaticity (u,v) + luminancia
+  - `bilp/texture.py`: Gabor filters + FFT features
+
+### Día 2 — Data Loaders
+**Completado:**
+- [x] Implementación de data loaders:
+  - `eval/loaders.py`: Loaders completos para Market-1501 e iLIDS-VID
+  - `eval/__init__.py`: Módulo de evaluación
+- [x] Funcionalidades implementadas:
+  - Parser de nombres Market-1501: `parse_market1501_name()`
+  - Parser de nombres iLIDS-VID: `parse_ilids_name()`
+  - Loader Market-1501: `load_market1501()` con splits train/test/query
+  - Loader iLIDS-VID: `load_ilids_vid()` con sampling de frames
+  - Estrategias de sampling: uniform, random, all
+  - Función de resize automático a 128×64
+  - Estadísticas de datasets: `get_market1501_stats()`, `get_ilids_stats()`
+- [x] Testing completo:
+  - Script de prueba: `scripts/test_loaders.py`
+  - Market-1501: 12,936 train + 3,362 queries cargadas correctamente
+  - iLIDS-VID: 600 secuencias (300 IDs x 2 cámaras) cargadas correctamente
+
+### Día 3 — Módulos BILP Completos
+**Completado:**
+- [x] Implementación completa de módulos BILP:
+  - `bilp/utils.py`: Normalización y extracción batch
+  - `bilp/distance.py`: Cálculo de distancias y ranking
+  - `bilp/gating.py`: Fusión adaptativa color/textura
+- [x] Funcionalidades implementadas:
+  - **utils.py**: normalize_l1, power_normalize, extract_bilp_descriptor, extract_bilp_batch, save/load_features
+  - **distance.py**: bilp_distance, compute_distance_matrix_fast, rank_gallery, compute_ap
+  - **gating.py**: compute_gating_weight, optimize_gating_params, per-stripe gating
+- [x] Testing completo:
+  - Script de prueba: `scripts/test_bilp.py`
+  - Extracción de features: 1,884 dims (1,632 color + 252 texture)
+  - Batch processing funcionando
+  - Gating weights calculados correctamente
+  - Distance matrix computada
+
+**Próximos pasos:**
+- [ ] Implementar métricas CMC y mAP (eval/cmc_map.py)
+- [ ] Calibrar rangos (u,v) de color con train set de Market-1501
+- [ ] Script de extracción de features para dataset completo
+- [ ] Evaluación en Market-1501 y iLIDS-VID
+
+### Verificación de Datasets
+**Completado:**
+- [x] **Market-1501**: Dataset completo y verificado
+  - 12,936 imágenes train (751 IDs)
+  - 19,732 imágenes test (750 IDs)
+  - 3,368 queries
+  - Split oficial listo para usar
+- [x] **iLIDS-VID**: Dataset completo y verificado
+  - Secuencias de video por persona
+  - 2 cámaras (cam1, cam2)
+  - Splits oficiales en formato .mat
+  - Frames en formato .png
+
+Ver detalles completos en [DATASET_VERIFICATION.md](DATASET_VERIFICATION.md)
+
+---
+
+## Estructura del Código
+
+### `/eval/` - Módulo de evaluación y data loading
+
+#### `loaders.py` - Implementado
+Carga de datasets con funcionalidades completas:
+
+**Market-1501:**
+- `load_market1501(dataset_path, split, resize, return_images)`: Carga train/test/query
+- `parse_market1501_name(filename)`: Parser de nombres (person_id, camera_id, frame, bbox)
+- `get_market1501_stats(data)`: Estadísticas del dataset
+- Soporte para resize automático a 128×64
+- Filtrado automático de imágenes junk (ID -1, 0000)
+
+**iLIDS-VID:**
+- `load_ilids_vid(dataset_path, num_frames, sampling_strategy, resize, return_images)`: Carga secuencias
+- `parse_ilids_name(filename)`: Parser de nombres de frames
+- `sample_frames_from_sequence(frames, num_frames, strategy)`: Sampling uniforme/random/all
+- `get_ilids_stats(data)`: Estadísticas del dataset
+- Default: K=10 frames por secuencia (sampling uniforme)
+
+**Utilidades:**
+- `create_train_val_split(data, val_ratio, seed)`: Split train/val por person ID
+
+#### `cmc_map.py` (Por implementar)
+Métricas de evaluación:
+- CMC (Cumulative Matching Characteristic)
+- mAP (mean Average Precision) para Market-1501
+
+#### `splits.py` (Por implementar)
+Manejo de splits oficiales:
+- Parser de archivos .mat (iLIDS-VID)
+- Validación de splits
+
+#### `plots.py` (Por implementar)
+Visualización:
+- Curvas CMC
+- Top-k retrieval examples
+- Distribución de distancias
+
+---
+
+### `/bilp/` - Módulo principal BILP
+
+#### `color.py`
+Extracción de características de color invariantes a brillo:
+- **Log-chromaticity**: `u = log(R/G)`, `v = log(B/G)`
+- **Luminancia**: Canal Y para información de intensidad
+- **Histogramas por stripe**: 16×16 bins (u,v) + 16 bins (luminancia)
+- **Calibración**: Rangos (u,v) calculados con percentiles 1-99% del train set
+
+**Dimensión por stripe**: 272 features (256 + 16)
+
+#### `texture.py`
+Extracción de características de textura:
+- **Gabor bank**: 5 escalas × 8 orientaciones = 40 filtros
+- **FFT features**: Frecuencia pico + entropía espectral
+- **Energía por banda**: L2 norm de respuesta filtrada
+
+**Dimensión por stripe**: 42 features (40 Gabor + 2 FFT)
+
+#### `gating.py` - Implementado
+Fusión adaptativa color/textura:
+- **`compute_gating_weight(color, texture, params)`**: Calcula α = σ(a1·T - a2·C + b)
+  - C: entropía cromática (de histograma 2D u,v)
+  - T: proporción de energía en altas frecuencias (Gabor)
+- **`compute_gating_weights_batch()`**: Cálculo batch de pesos
+- **`optimize_gating_params()`**: Grid-search de parámetros (a1, a2, b)
+- **`compute_per_stripe_gating()`**: Gating independiente por stripe
+
+#### `distance.py` - Implementado
+Cálculo de distancias BILP:
+- **`bilp_distance()`**: d = α·d_tex + (1-α)·d_col
+- **`compute_distance_matrix_fast()`**: Matriz de distancias optimizada con scipy
+- **`l1_distance(), l2_distance(), chi_square_distance()`**: Métricas de distancia
+- **`rank_gallery()`**: Ranking de galería para una query
+- **`compute_ap()`**: Average Precision para Market-1501
+
+Soporta múltiples métricas: L1 (cityblock), L2 (euclidean), Chi-square, Bhattacharyya
+
+#### `utils.py` - Implementado
+Utilidades completas:
+- **Normalización**: `normalize_l1()`, `power_normalize()`, `normalize_features()`
+- **`extract_bilp_descriptor(image)`**: Extracción end-to-end para una imagen
+- **`extract_bilp_batch(images)`**: Procesamiento batch optimizado
+- **`save_features() / load_features()`**: Guardado/carga de features en .npz
+- **`compute_feature_stats()`**: Estadísticas de features
+
+---
+
+## Uso del Proyecto
+
+### 1. Construcción del entorno Docker
+
+```bash
+docker build -t cv-project .
+```
+
+### 2. Ejecutar scripts en el contenedor
+
+```bash
+# Modo interactivo
+docker run -it --rm -v $(pwd):/app cv-project bash
+
+# Ejecutar script específico
+docker run --rm -v $(pwd):/app cv-project python scripts/01_prepare_data.py
+```
+
+---
+
+## Dimensiones de Features
+
+### Por imagen (6 stripes):
+- **Color**: 6 × 272 = **1,632 features**
+- **Textura**: 6 × 42 = **252 features**
+- **Total**: **1,884 features**
+
+### Procesamiento por stripe:
+Cada imagen se divide en **6 horizontal stripes** para capturar información espacial.
+
+---
+
+## Próximos Pasos Inmediatos
+
+1. **Completar módulo de gating** (`bilp/gating.py`)
+2. **Completar módulo de distancia** (`bilp/distance.py`)
+3. **Crear utils** (`bilp/utils.py`)
+4. **Testear pipeline completo** con imágenes sintéticas
+5. **Preparar loaders de datasets** (Market-1501 e iLIDS-VID)
+
+---
+
+## Referencias
+
+- **Market-1501**: Zheng et al. "Scalable Person Re-identification: A Benchmark" (ICCV 2015)
+- **iLIDS-VID**: Wang et al. "Person Re-Identification by Video Ranking" (ECCV 2014)
+- **BILP**: Basado en técnicas de color invariante y análisis de textura multi-escala
+
+---
+
+## Notas de Desarrollo
+
+### Log de Cambios
+
+**2025-11-06 - Día 1 (Setup completo)**
+- Setup inicial del proyecto con Docker
+- Creación de Dockerfile y requirements.txt
+- Implementación de `bilp/color.py` y `bilp/texture.py`
+- Estructura de directorios completa
+- Verificación de datasets: Market-1501 e iLIDS-VID correctos y completos
+- Market-1501: 12,936 train + 19,732 test + 3,368 queries
+- iLIDS-VID: Secuencias de video, 2 cámaras, splits oficiales
+
+**2025-11-06 - Día 2 (Data Loaders)**
+- Implementación completa de `eval/loaders.py`
+- Parser de nombres para ambos datasets
+- Loader Market-1501 con splits train/test/query
+- Loader iLIDS-VID con sampling de frames (uniform/random/all)
+- Funciones de estadísticas y train/val split
+- Testing completo: todos los loaders funcionando correctamente
+- Resultados: 12,936 train images + 600 video sequences cargadas
+
+**2025-11-06 - Día 3 (Módulos BILP Completos)**
+- Implementación completa de todos los módulos BILP
+- `bilp/utils.py`: Normalización L1/power, extracción batch, save/load features
+- `bilp/distance.py`: Distancias L1/L2/Chi2/Bhattacharyya, ranking, mAP
+- `bilp/gating.py`: Fusión adaptativa con parámetros optimizables
+- Testing completo del pipeline BILP
+- Extracción verificada: 1,884 features (1,632 color + 252 texture)
+- Batch processing funcionando en 100 imágenes
+- Distance matrix computada correctamente
+
+---
+
+## Autores
+
+Bruno Ramos - CV Obligatorio - 2025
