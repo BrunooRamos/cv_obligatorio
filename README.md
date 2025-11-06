@@ -76,11 +76,26 @@ Este proyecto implementa un método de re-identificación de personas basado en 
   - Gating weights calculados correctamente
   - Distance matrix computada
 
+### Día 4 — Métricas de Evaluación
+**Completado:**
+- [x] Implementación completa de métricas:
+  - `eval/cmc_map.py`: CMC y mAP para re-identificación
+- [x] Funcionalidades implementadas:
+  - **CMC**: compute_cmc() con soporte para junk removal
+  - **mAP**: compute_map() y compute_single_ap()
+  - **Evaluación**: evaluate_market1501(), evaluate_ilids_vid()
+  - **Utilidades**: print_results(), save/load_results()
+- [x] Testing completo:
+  - Script de prueba: `scripts/test_metrics.py`
+  - Tests sintéticos: CMC y mAP perfectos verificados
+  - Test con datos reales: Rank-1 = 70%, mAP = 63.73% (subset)
+  - Junk removal funcionando correctamente
+
 **Próximos pasos:**
-- [ ] Implementar métricas CMC y mAP (eval/cmc_map.py)
 - [ ] Calibrar rangos (u,v) de color con train set de Market-1501
 - [ ] Script de extracción de features para dataset completo
-- [ ] Evaluación en Market-1501 y iLIDS-VID
+- [ ] Evaluación end-to-end en Market-1501 completo
+- [ ] Evaluación en iLIDS-VID
 
 ### Verificación de Datasets
 **Completado:**
@@ -123,10 +138,25 @@ Carga de datasets con funcionalidades completas:
 **Utilidades:**
 - `create_train_val_split(data, val_ratio, seed)`: Split train/val por person ID
 
-#### `cmc_map.py` (Por implementar)
-Métricas de evaluación:
-- CMC (Cumulative Matching Characteristic)
-- mAP (mean Average Precision) para Market-1501
+#### `cmc_map.py` - Implementado
+Métricas de evaluación completas:
+
+**CMC (Cumulative Matching Characteristic):**
+- `compute_cmc()`: Calcula curva CMC hasta rank-k
+- Soporte para junk removal (same camera images)
+- Retorna array con scores para cada rank
+
+**mAP (mean Average Precision):**
+- `compute_map()`: Calcula mAP para Market-1501
+- `compute_single_ap()`: AP para una sola query
+- Manejo correcto de junk images (same ID + same camera)
+
+**Funciones de evaluación:**
+- `evaluate_reid()`: Evaluación completa (CMC + mAP)
+- `evaluate_market1501()`: Wrapper específico para Market-1501
+- `evaluate_ilids_vid()`: Wrapper para iLIDS-VID (solo CMC)
+- `print_results()`: Impresión formateada de resultados
+- `save_results() / load_results()`: Persistencia de resultados
 
 #### `splits.py` (Por implementar)
 Manejo de splits oficiales:
@@ -270,9 +300,3 @@ Cada imagen se divide en **6 horizontal stripes** para capturar información esp
 - Extracción verificada: 1,884 features (1,632 color + 252 texture)
 - Batch processing funcionando en 100 imágenes
 - Distance matrix computada correctamente
-
----
-
-## Autores
-
-Bruno Ramos - CV Obligatorio - 2025
