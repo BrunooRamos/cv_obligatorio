@@ -273,7 +273,7 @@ Cada imagen se divide en **6 horizontal stripes** para capturar información esp
 
 ### Log de Cambios
 
-**2025-11-06 - Día 1 (Setup completo)**
+**Setup completo**
 - Setup inicial del proyecto con Docker
 - Creación de Dockerfile y requirements.txt
 - Implementación de `bilp/color.py` y `bilp/texture.py`
@@ -282,7 +282,7 @@ Cada imagen se divide en **6 horizontal stripes** para capturar información esp
 - Market-1501: 12,936 train + 19,732 test + 3,368 queries
 - iLIDS-VID: Secuencias de video, 2 cámaras, splits oficiales
 
-**2025-11-06 - Día 2 (Data Loaders)**
+**Data Loaders**
 - Implementación completa de `eval/loaders.py`
 - Parser de nombres para ambos datasets
 - Loader Market-1501 con splits train/test/query
@@ -291,7 +291,7 @@ Cada imagen se divide en **6 horizontal stripes** para capturar información esp
 - Testing completo: todos los loaders funcionando correctamente
 - Resultados: 12,936 train images + 600 video sequences cargadas
 
-**2025-11-06 - Día 3 (Módulos BILP Completos)**
+**Módulos BILP Completos**
 - Implementación completa de todos los módulos BILP
 - `bilp/utils.py`: Normalización L1/power, extracción batch, save/load features
 - `bilp/distance.py`: Distancias L1/L2/Chi2/Bhattacharyya, ranking, mAP
@@ -300,3 +300,13 @@ Cada imagen se divide en **6 horizontal stripes** para capturar información esp
 - Extracción verificada: 1,884 features (1,632 color + 252 texture)
 - Batch processing funcionando en 100 imágenes
 - Distance matrix computada correctamente
+
+**Métricas de Evaluación**
+- Implementación de `eval/cmc_map.py` con CMC y mAP
+- CMC (Cumulative Matching Characteristic) completo
+- mAP (mean Average Precision) para Market-1501
+- Soporte para junk removal (same camera images)
+- Funciones de evaluación: evaluate_market1501(), evaluate_ilids_vid()
+- Testing completo con datos sintéticos y reales
+- Resultados en subset (10 queries, 100 gallery): Rank-1=70%, mAP=63.73%
+
