@@ -31,7 +31,8 @@ from .utils import (
     extract_bilp_descriptor,
     extract_bilp_batch,
     save_features,
-    load_features
+    load_features,
+    load_calibrated_color_ranges
 )
 
 __all__ = [
@@ -60,5 +61,6 @@ __all__ = [
     'extract_bilp_descriptor',
     'extract_bilp_batch',
     'save_features',
-    'load_features'
+    'load_features',
+    'load_calibrated_color_ranges'
 ]

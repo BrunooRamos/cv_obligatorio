@@ -3,6 +3,8 @@ Utility functions for BILP feature extraction and normalization
 """
 
 import numpy as np
+import json
+import os
 from typing import Tuple, Optional, Dict
 from .color import extract_color_features
 from .texture import extract_texture_features, build_gabor_bank
@@ -68,6 +70,30 @@ def normalize_features(
         raise ValueError(f"Unknown normalization method: {method}")
 
 
+def load_calibrated_color_ranges(filepath: str = '/app/data/color_ranges.json') -> Tuple[Tuple[float, float], Tuple[float, float]]:
+    """
+    Load calibrated (u,v) color ranges from file.
+
+    Args:
+        filepath: Path to calibration file
+
+    Returns:
+        u_range, v_range: Tuples with (min, max) ranges
+    """
+    if not os.path.exists(filepath):
+        # Return default ranges if file doesn't exist
+        print(f"Warning: Calibration file not found at {filepath}, using default ranges")
+        return (-0.66, 1.07), (-0.66, 0.48)
+
+    with open(filepath, 'r') as f:
+        data = json.load(f)
+
+    u_range = tuple(data['u_range'])
+    v_range = tuple(data['v_range'])
+
+    return u_range, v_range
+
+
 def normalize_per_stripe(
     features: np.ndarray,
     n_stripes: int,
@@ -124,11 +150,14 @@ def extract_bilp_descriptor(
     """
     # Default parameters
     if color_params is None:
+        # Load calibrated ranges if available
+        u_range, v_range = load_calibrated_color_ranges()
+
         color_params = {
             'n_bins_uv': 16,
             'n_bins_lum': 16,
-            'u_range': None,
-            'v_range': None
+            'u_range': u_range,
+            'v_range': v_range
         }
 
     if texture_params is None:

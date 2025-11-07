@@ -310,3 +310,21 @@ Cada imagen se divide en **6 horizontal stripes** para capturar información esp
 - Testing completo con datos sintéticos y reales
 - Resultados en subset (10 queries, 100 gallery): Rank-1=70%, mAP=63.73%
 
+
+### Día 5 — Calibración de Rangos de Color
+**Completado:**
+- [x] Script de calibración: `scripts/calibrate_color_ranges.py`
+- [x] Calibración automática de rangos (u,v) desde Market-1501 train
+- [x] Rangos calibrados guardados en `data/color_ranges.json`
+- [x] Función `load_calibrated_color_ranges()` en bilp/utils.py
+- [x] Integración automática en `extract_bilp_descriptor()`
+- [x] Testing: 96.53% de píxeles dentro de rangos calibrados
+
+**Calibración de Color**
+- Implementación de calibración automática de rangos (u,v)
+- Script `calibrate_color_ranges.py` para calibrar desde train set
+- Rangos calibrados: u=[-0.663, 1.069], v=[-0.656, 0.480]
+- Función `load_calibrated_color_ranges()` para cargar rangos
+- Integración automática en BILP descriptor extraction
+- Testing: 96.53% de píxeles dentro de rangos calibrados
+- Persistencia en JSON: `data/color_ranges.json`
