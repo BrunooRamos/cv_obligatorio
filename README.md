@@ -34,7 +34,8 @@ Este proyecto implementa un método de re-identificación de personas basado en 
   /data/{market1501, ilids-vid}/
   /bilp/{color.py, texture.py, gating.py, distance.py, utils.py}
   /eval/{loaders.py, cmc_map.py, splits.py, plots.py}
-  /scripts/{01_prepare_data.py, 02_extract_features.py, 03_eval_market.py,
+  /scripts/{01_prepare_data.py, 02_extract_market_features.py,
+            02_extract_ilids_features.py, 03_eval_market.py,
             04_eval_ilidsvid.py, 05_ablation.py}
   ```
 - [x] Módulos BILP base creados:
@@ -427,3 +428,11 @@ Próximos pasos:
 
 - Próximo paso inmediato: Ejecutar evaluación con gallery más grande (5,000-10,000 imágenes)
 
+---
+
+## Actualizaciones recientes
+
+- `scripts/02_extract_market_features.py`: nuevo nombre y parámetros claros para extraer y guardar features de Market-1501 por split (`train`, `query`, `test`). Produce `.npz` con color, textura y metadata.
+- `scripts/02_extract_ilids_features.py`: extracción para iLIDS-VID. Muestras K frames por secuencia (cam1 → query, cam2 → gallery), promedia features y guarda `.npz` separados.
+- `scripts/03_eval_market.py`: carga features precomputadas de Market-1501, calcula matriz de distancias (color+textura) y reporta mAP/CMC completos. Permite guardar resultados.
+- `scripts/04_eval_ilidsvid.py`: evaluación CMC para iLIDS-VID usando los `.npz` generados. Configurable (`alpha`, métrica, rank máximo).

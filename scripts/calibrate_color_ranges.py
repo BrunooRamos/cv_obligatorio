@@ -16,7 +16,7 @@ def calibrate_from_train_set(
     sample_size: int = 1000,
     percentile_low: float = 1,
     percentile_high: float = 99,
-    save_path: str = '/app/data/color_ranges.json'
+    save_path: str = 'app/data/color_ranges.json'
 ):
     """
     Calibrate (u,v) color ranges from Market-1501 training set.
@@ -156,7 +156,7 @@ def load_calibrated_ranges(filepath: str = '/app/data/color_ranges.json'):
 
 def test_calibration(
     dataset_path: str,
-    calibration_path: str = '/app/data/color_ranges.json'
+    calibration_path: str = 'app/data/color_ranges.json'
 ):
     """
     Test calibrated ranges on sample images.
@@ -222,8 +222,8 @@ def test_calibration(
 
 def main():
     """Main calibration pipeline"""
-    dataset_path = "/datasets/Market-1501-v15.09.15"
-    save_path = "/app/data/color_ranges.json"
+    dataset_path = "datasets/Market-1501-v15.09.15"
+    save_path = "data/color_ranges_market.json"
 
     # Calibrate
     calibration_data = calibrate_from_train_set(

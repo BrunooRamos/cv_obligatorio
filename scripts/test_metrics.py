@@ -128,7 +128,7 @@ def test_real_data_small_subset():
     print("=" * 60)
 
     # Load small subset of Market-1501
-    dataset_path = "/datasets/Market-1501-v15.09.15"
+    dataset_path = "datasets/Market-1501-v15.09.15"
 
     print("\nLoading query images...")
     query_data = load_market1501(dataset_path, split='query', return_images=True)[:10]

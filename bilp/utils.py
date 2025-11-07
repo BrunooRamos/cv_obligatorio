@@ -70,7 +70,7 @@ def normalize_features(
         raise ValueError(f"Unknown normalization method: {method}")
 
 
-def load_calibrated_color_ranges(filepath: str = '/app/data/color_ranges.json') -> Tuple[Tuple[float, float], Tuple[float, float]]:
+def load_calibrated_color_ranges(filepath: str = 'app/data/color_ranges.json') -> Tuple[Tuple[float, float], Tuple[float, float]]:
     """
     Load calibrated (u,v) color ranges from file.
 
