@@ -26,7 +26,7 @@ Este proyecto implementa un método de re-identificación de personas basado en 
 
 ## Roadmap del Proyecto
 
-### Día 1 — Setup y Estructura
+### Setup y Estructura
 **Completado:**
 - [x] Entorno Docker con dependencias (numpy, opencv, scikit-image, scipy, scikit-learn, matplotlib)
 - [x] Estructura de directorios:
@@ -41,7 +41,7 @@ Este proyecto implementa un método de re-identificación de personas basado en 
   - `bilp/color.py`: Log-chromaticity (u,v) + luminancia
   - `bilp/texture.py`: Gabor filters + FFT features
 
-### Día 2 — Data Loaders
+### Data Loaders
 **Completado:**
 - [x] Implementación de data loaders:
   - `eval/loaders.py`: Loaders completos para Market-1501 e iLIDS-VID
@@ -59,7 +59,7 @@ Este proyecto implementa un método de re-identificación de personas basado en 
   - Market-1501: 12,936 train + 3,362 queries cargadas correctamente
   - iLIDS-VID: 600 secuencias (300 IDs x 2 cámaras) cargadas correctamente
 
-### Día 3 — Módulos BILP Completos
+### Módulos BILP Completos
 **Completado:**
 - [x] Implementación completa de módulos BILP:
   - `bilp/utils.py`: Normalización y extracción batch
@@ -76,7 +76,7 @@ Este proyecto implementa un método de re-identificación de personas basado en 
   - Gating weights calculados correctamente
   - Distance matrix computada
 
-### Día 4 — Métricas de Evaluación
+### Métricas de Evaluación
 **Completado:**
 - [x] Implementación completa de métricas:
   - `eval/cmc_map.py`: CMC y mAP para re-identificación
@@ -310,16 +310,6 @@ Cada imagen se divide en **6 horizontal stripes** para capturar información esp
 - Testing completo con datos sintéticos y reales
 - Resultados en subset (10 queries, 100 gallery): Rank-1=70%, mAP=63.73%
 
-
-### Día 5 — Calibración de Rangos de Color
-**Completado:**
-- [x] Script de calibración: `scripts/calibrate_color_ranges.py`
-- [x] Calibración automática de rangos (u,v) desde Market-1501 train
-- [x] Rangos calibrados guardados en `data/color_ranges.json`
-- [x] Función `load_calibrated_color_ranges()` en bilp/utils.py
-- [x] Integración automática en `extract_bilp_descriptor()`
-- [x] Testing: 96.53% de píxeles dentro de rangos calibrados
-
 **Calibración de Color**
 - Implementación de calibración automática de rangos (u,v)
 - Script `calibrate_color_ranges.py` para calibrar desde train set
@@ -328,3 +318,112 @@ Cada imagen se divide en **6 horizontal stripes** para capturar información esp
 - Integración automática en BILP descriptor extraction
 - Testing: 96.53% de píxeles dentro de rangos calibrados
 - Persistencia en JSON: `data/color_ranges.json`
+
+## Evaluación End-to-End (Subset)
+
+### Script de Evaluación
+Creado scripts/eval_market_subset.py para pipeline completo de evaluación:
+- Carga queries y gallery (con muestreo opcional)
+- Extrae features BILP usando rangos de color calibrados
+- Computa matriz de distancias con alpha configurable
+- Evalúa métricas CMC y mAP
+- Guarda features y resultados
+
+### Resultados Iniciales (Gallery=100)
+
+Configuración:
+- Queries: 3,362 (todas)
+- Gallery: 100 imágenes (muestra aleatoria)
+- Alpha (gating): 0.5
+- Tiempo de extracción de features: 1788.80s (0.517s por imagen)
+
+Resultados:
+- mAP: 24.91%
+- Rank-1: 1.55%
+- Rank-5: 3.57%
+- Rank-10: 4.88%
+- Rank-20: 6.07%
+
+Análisis:
+- mAP de 24.91% es alentador para features handcrafted
+- Rank-1 bajo (1.55%) es esperado con gallery muy pequeña (100 imágenes)
+- El sistema maneja correctamente el junk removal (imágenes de misma cámara)
+- La extracción de features es el cuello de botella (99.8% del tiempo total)
+- El cómputo de distancias es muy rápido (0.27s para 336,200 distancias)
+
+Archivos guardados:
+- data/features_subset.npz: Features BILP extraídas
+- data/results_subset.npz: Resultados de evaluación
+
+Próximos pasos:
+- Evaluar con gallery más grande (5,000-10,000 imágenes) para resultados más realistas
+- Optimizar parámetros de gating (a1, a2, b) si es necesario
+- Considerar extraer features para el dataset completo para evaluaciones posteriores más rápidas
+
+
+## Tareas Pendientes
+
+### Corto Plazo (Evaluación y Optimización)
+1. Ejecutar evaluación con tamaños de gallery más grandes:
+   - 5,000 imágenes: Evaluación de rendimiento más realista
+   - 10,000 imágenes: Mejor significancia estadística
+   - Test set completo (19,732 imágenes): Resultados finales de benchmark
+
+2. Optimizar parámetros de gating:
+   - Actual: alpha=0.5 (peso fijo igual)
+   - TODO: Grid search para parámetros óptimos a1, a2, b
+   - Implementar gating adaptativo por stripe usando funciones de bilp/gating.py
+
+3. Estudios de ablación:
+   - Features solo color (alpha=0.0)
+   - Features solo textura (alpha=1.0)
+   - Comparar con diferentes valores de alpha (0.3, 0.5, 0.7)
+
+### Mediano Plazo (Dataset Completo)
+4. Extraer y guardar features para dataset completo:
+   - Train set: 12,936 imágenes
+   - Test/gallery: 19,732 imágenes
+   - Query: 3,362 imágenes
+   - Total: ~33k imágenes (~4.8 horas a 0.517s/imagen)
+   - Beneficio: Ejecutar múltiples evaluaciones sin re-extraer features
+
+5. Evaluar en dataset iLIDS-VID:
+   - Implementar manejo de secuencias de video (muestreo de K frames)
+   - Protocolo de evaluación multi-shot
+   - Comparar con resultados de Market-1501
+
+### Largo Plazo (Features Avanzadas)
+6. Optimizaciones de rendimiento:
+   - Paralelizar extracción de features (multiprocessing)
+   - Optimizar cómputo de filtros Gabor
+   - Considerar aceleración GPU para matriz de distancias
+
+7. Comparaciones con baselines:
+   - Implementar baselines simples (histograma HSV, LBP)
+   - Comparar BILP vs baselines
+   - Documentar trade-offs de rendimiento
+
+8. Herramientas de visualización:
+   - Visualización de resultados de queries
+   - Visualización de features
+   - Heatmaps de matriz de distancias
+   - Gráficos de curvas CMC
+
+### Documentación
+9. Reporte final:
+   - Tabla completa de resultados
+   - Análisis de rendimiento
+   - Limitaciones y trabajo futuro
+   - Instrucciones de uso
+
+### Estado Actual
+- COMPLETO
+  - Configuración de entorno Docker
+  - Implementación BILP (color, textura, gating, distancia)
+  - Data loaders (Market-1501, iLIDS-VID)
+  - Métricas de evaluación (CMC, mAP)
+  - Calibración de color desde training set
+  - Pipeline de evaluación end-to-end
+
+- Próximo paso inmediato: Ejecutar evaluación con gallery más grande (5,000-10,000 imágenes)
+
