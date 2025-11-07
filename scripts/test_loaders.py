@@ -71,7 +71,7 @@ def test_market1501_loader():
     print("Testing Market-1501 loader...")
     print("=" * 60)
 
-    dataset_path = "/datasets/Market-1501-v15.09.15"
+    dataset_path = "datasets/Market-1501-v15.09.15"
 
     # Test train split (metadata only)
     print("\nLoading train split (metadata only)...")
@@ -112,7 +112,7 @@ def test_ilids_loader():
     print("Testing iLIDS-VID loader...")
     print("=" * 60)
 
-    dataset_path = "/datasets/iLIDS-VID"
+    dataset_path = "datasets/iLIDS-VID"
 
     # Test loading sequences (metadata only)
     print("\nLoading sequences (metadata only, 10 frames uniform sampling)...")

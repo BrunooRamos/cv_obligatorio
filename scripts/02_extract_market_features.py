@@ -73,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--calibration-file',
         type=str,
-        default='app/data/color_ranges_market.json',
+        default='data/color_ranges_market.json',
         help='Path to the calibrated color range JSON file.',
     )
     parser.add_argument(

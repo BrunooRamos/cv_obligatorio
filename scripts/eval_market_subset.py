@@ -18,7 +18,7 @@ def eval_market1501_subset(
     gallery_size: int = 5000,
     alpha: float = 0.5,
     save_features: bool = True,
-    results_path: str = '/app/data/results_subset.npz'
+    results_path: str = 'data/results_subset.npz'
 ):
     """
     Evaluate BILP on Market-1501 subset.
@@ -95,7 +95,7 @@ def eval_market1501_subset(
 
     # Save features if requested
     if save_features:
-        features_path = '/app/data/features_subset.npz'
+        features_path = 'data/features_subset.npz'
         print(f"\nSaving features to {features_path}...")
         np.savez_compressed(
             features_path,
@@ -179,7 +179,7 @@ def main():
                         help='Gating weight (0=color only, 1=texture only)')
     parser.add_argument('--no-save-features', action='store_true',
                         help='Do not save extracted features')
-    parser.add_argument('--results-path', type=str, default='/app/data/results_subset.npz',
+    parser.add_argument('--results-path', type=str, default='data/results_subset.npz',
                         help='Path to save results')
 
     args = parser.parse_args()
