@@ -238,6 +238,23 @@ docker run -it --rm -v $(pwd):/app cv-project bash
 docker run --rm -v $(pwd):/app cv-project python scripts/01_prepare_data.py
 ```
 
+### 3. Ejecución en VM con GPU
+
+Para ejecutar el proyecto en una VM de Google Cloud con GPU usando Docker, consulta la guía completa en **[GPU_SETUP.md](GPU_SETUP.md)**.
+
+La guía incluye:
+- Configuración de la VM con GPU
+- Instalación de Docker y NVIDIA Container Toolkit
+- Preparación de datasets
+- Construcción de imagen Docker con soporte GPU (CuPy)
+- Ejecución del pipeline completo con aceleración GPU
+- Troubleshooting y optimización de costos
+
+**Mejora de rendimiento con GPU:**
+- Extracción de features: 5-20x más rápido
+- Cálculo de distancias: 10-50x más rápido
+- Tiempo total estimado: ~1-1.5 horas (vs ~5-6 horas en CPU)
+
 ---
 
 ## Dimensiones de Features

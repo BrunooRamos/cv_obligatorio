@@ -11,6 +11,7 @@ import numpy as np
 
 from bilp.utils import load_features
 from bilp.distance import compute_distance_matrix_fast
+from bilp.gpu_utils import get_device
 from eval.cmc_map import evaluate_ilids_vid, print_results, save_results
 
 
@@ -58,6 +59,11 @@ def parse_args() -> argparse.Namespace:
         '--verbose',
         action='store_true',
         help='Print additional debug information.',
+    )
+    parser.add_argument(
+        '--use-gpu',
+        action='store_true',
+        help='Use GPU for distance computation if available (requires CuPy).',
     )
     return parser.parse_args()
 
@@ -133,6 +139,13 @@ def main() -> None:
     if args.verbose:
         print('Computing distance matrix...')
 
+    # Get GPU device if requested
+    is_gpu, device = get_device(args.use_gpu)
+    if is_gpu and args.verbose:
+        print(f"Using GPU for distance computation")
+    elif args.use_gpu and not is_gpu and args.verbose:
+        print(f"GPU requested but not available, using CPU")
+
     distance_matrix = compute_distance_matrix_fast(
         query_color,
         query_texture,
@@ -140,6 +153,7 @@ def main() -> None:
         gallery_texture,
         alpha=args.alpha,
         metric=args.metric,
+        device=device,
     )
 
     if args.verbose:

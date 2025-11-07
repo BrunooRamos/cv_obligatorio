@@ -4,7 +4,8 @@ Texture features: Gabor filters, periodicity, and spectral analysis
 
 import numpy as np
 from scipy import ndimage
-from typing import Tuple, List
+from typing import Tuple, List, Optional
+from .gpu_utils import get_device, convolve_gpu
 
 
 def create_gabor_filter(
@@ -83,13 +84,18 @@ def build_gabor_bank(
     return filters
 
 
-def apply_gabor_bank(image: np.ndarray, gabor_bank: List[np.ndarray]) -> np.ndarray:
+def apply_gabor_bank(
+    image: np.ndarray,
+    gabor_bank: List[np.ndarray],
+    device: Optional = None
+) -> np.ndarray:
     """
     Apply Gabor filter bank to image and compute energy.
 
     Args:
         image: Grayscale image (H, W)
         gabor_bank: List of Gabor filters
+        device: GPU device (CuPy) or None for CPU
 
     Returns:
         Gabor energies (n_filters,)
@@ -97,8 +103,11 @@ def apply_gabor_bank(image: np.ndarray, gabor_bank: List[np.ndarray]) -> np.ndar
     energies = []
 
     for gabor in gabor_bank:
-        # Convolve
-        filtered = ndimage.convolve(image, gabor, mode='reflect')
+        # Convolve (use GPU if available)
+        if device is not None:
+            filtered = convolve_gpu(image, gabor, device)
+        else:
+            filtered = ndimage.convolve(image, gabor, mode='reflect')
         # Compute energy (L2 norm)
         energy = np.sqrt(np.mean(filtered**2))
         energies.append(energy)
@@ -158,7 +167,8 @@ def extract_texture_features(
     n_stripes: int = 6,
     gabor_bank: List[np.ndarray] = None,
     n_scales: int = 5,
-    n_orientations: int = 8
+    n_orientations: int = 8,
+    device: Optional = None
 ) -> np.ndarray:
     """
     Extract texture features from image using horizontal stripes.
@@ -169,6 +179,7 @@ def extract_texture_features(
         gabor_bank: Pre-computed Gabor filter bank (optional)
         n_scales: Number of Gabor scales
         n_orientations: Number of Gabor orientations
+        device: GPU device (CuPy) or None for CPU
 
     Returns:
         Texture features (n_stripes × n_features,)
@@ -197,8 +208,8 @@ def extract_texture_features(
 
         stripe = gray[start_h:end_h, :]
 
-        # Gabor energies
-        gabor_energies = apply_gabor_bank(stripe, gabor_bank)
+        # Gabor energies (use GPU if available)
+        gabor_energies = apply_gabor_bank(stripe, gabor_bank, device)
 
         # FFT features
         peak_freq, spec_entropy = compute_fft_features(stripe)

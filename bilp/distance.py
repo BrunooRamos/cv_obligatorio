@@ -5,6 +5,7 @@ Distance computation for BILP features
 import numpy as np
 from typing import Optional, Union
 from scipy.spatial.distance import cdist
+from .gpu_utils import cdist_gpu
 
 
 def l1_distance(x: np.ndarray, y: np.ndarray) -> float:
@@ -168,10 +169,11 @@ def compute_distance_matrix_fast(
     gallery_color: np.ndarray,
     gallery_texture: np.ndarray,
     alpha: float = 0.5,
-    metric: str = 'cityblock'
+    metric: str = 'cityblock',
+    device: Optional = None
 ) -> np.ndarray:
     """
-    Fast computation of distance matrix using scipy.
+    Fast computation of distance matrix using scipy or GPU.
 
     Args:
         query_color: Query color features (n_query, color_dim)
@@ -179,14 +181,19 @@ def compute_distance_matrix_fast(
         gallery_color: Gallery color features (n_gallery, color_dim)
         gallery_texture: Gallery texture features (n_gallery, texture_dim)
         alpha: Gating weight (scalar only)
-        metric: scipy distance metric ('cityblock', 'euclidean', 'cosine')
+        metric: Distance metric ('cityblock', 'euclidean', 'cosine')
+        device: GPU device (CuPy) or None for CPU
 
     Returns:
         Distance matrix (n_query, n_gallery)
     """
-    # Compute separate distance matrices
-    dist_color = cdist(query_color, gallery_color, metric=metric)
-    dist_texture = cdist(query_texture, gallery_texture, metric=metric)
+    # Compute separate distance matrices (use GPU if available)
+    if device is not None:
+        dist_color = cdist_gpu(query_color, gallery_color, metric=metric, device=device)
+        dist_texture = cdist_gpu(query_texture, gallery_texture, metric=metric, device=device)
+    else:
+        dist_color = cdist(query_color, gallery_color, metric=metric)
+        dist_texture = cdist(query_texture, gallery_texture, metric=metric)
 
     # Combine with gating
     dist_matrix = alpha * dist_texture + (1 - alpha) * dist_color
