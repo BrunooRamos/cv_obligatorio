@@ -162,36 +162,41 @@ def convolve_gpu(
     h, w = image_gpu.shape
     k_h, k_w = kernel_gpu.shape
     
-    # If kernel is larger than image, fall back to CPU convolution
-    # or pad image instead of kernel
+    # If kernel is larger than image, pad image first
+    # Do padding in NumPy to avoid CuPy JIT compilation issues with xp.pad()
     if k_h > h or k_w > w:
-        # Pad image to be at least as large as kernel
+        # Transfer back to CPU for padding
+        image_cpu = to_cpu(image_gpu)
         pad_h_before = max(0, (k_h - h + 1) // 2)
         pad_h_after = max(0, k_h - h - pad_h_before)
         pad_w_before = max(0, (k_w - w + 1) // 2)
         pad_w_after = max(0, k_w - w - pad_w_before)
         
-        image_padded = xp.pad(
-            image_gpu,
+        image_padded_cpu = np.pad(
+            image_cpu,
             ((pad_h_before, pad_h_after), (pad_w_before, pad_w_after)),
             mode='constant'
         )
+        image_padded = to_gpu(image_padded_cpu, device)
         h_padded, w_padded = image_padded.shape
     else:
         image_padded = image_gpu
         h_padded, w_padded = h, w
     
     # Pad kernel to match (padded) image size for FFT-based convolution
+    # Do padding in NumPy to avoid CuPy JIT compilation issues
+    kernel_cpu = to_cpu(kernel_gpu)
     pad_h = (h_padded - k_h) // 2
     pad_w = (w_padded - k_w) // 2
     pad_h_after = h_padded - k_h - pad_h
     pad_w_after = w_padded - k_w - pad_w
     
-    kernel_padded = xp.pad(
-        kernel_gpu,
+    kernel_padded_cpu = np.pad(
+        kernel_cpu,
         ((pad_h, pad_h_after), (pad_w, pad_w_after)),
         mode='constant'
     )
+    kernel_padded = to_gpu(kernel_padded_cpu, device)
     
     # FFT-based convolution
     image_fft = xp.fft.fft2(image_padded)
@@ -257,34 +262,40 @@ def batch_convolve_gpu(
             k_h, k_w = kernel_gpu.shape
             
             # Handle case where kernel is larger than image
+            # Do padding in NumPy to avoid CuPy JIT compilation issues
             if k_h > h or k_w > w:
-                # Pad image to be at least as large as kernel
+                # Transfer back to CPU for padding
+                img_cpu = to_cpu(img)
                 pad_h_before = max(0, (k_h - h + 1) // 2)
                 pad_h_after = max(0, k_h - h - pad_h_before)
                 pad_w_before = max(0, (k_w - w + 1) // 2)
                 pad_w_after = max(0, k_w - w - pad_w_before)
                 
-                img_padded = xp.pad(
-                    img,
+                img_padded_cpu = np.pad(
+                    img_cpu,
                     ((pad_h_before, pad_h_after), (pad_w_before, pad_w_after)),
                     mode='constant'
                 )
+                img_padded = to_gpu(img_padded_cpu, device)
                 h_padded, w_padded = img_padded.shape
             else:
                 img_padded = img
                 h_padded, w_padded = h, w
             
             # Pad kernel to match (padded) image size
+            # Do padding in NumPy to avoid CuPy JIT compilation issues
+            kernel_cpu = to_cpu(kernel_gpu)
             pad_h = (h_padded - k_h) // 2
             pad_w = (w_padded - k_w) // 2
             pad_h_after = h_padded - k_h - pad_h
             pad_w_after = w_padded - k_w - pad_w
             
-            kernel_padded = xp.pad(
-                kernel_gpu,
+            kernel_padded_cpu = np.pad(
+                kernel_cpu,
                 ((pad_h, pad_h_after), (pad_w, pad_w_after)),
                 mode='constant'
             )
+            kernel_padded = to_gpu(kernel_padded_cpu, device)
             
             # FFT-based convolution
             img_fft = xp.fft.fft2(img_padded)

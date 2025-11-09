@@ -35,6 +35,13 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # Instalar CuPy para CUDA 12.x (compatible con la imagen base CUDA 12.3.0)
 RUN pip3 install --no-cache-dir cupy-cuda12x
 
+# Configurar variables de entorno para CUDA (necesarias para que CuPy encuentre los headers)
+ENV CUDA_PATH=/usr/local/cuda-12.3
+ENV CUDA_HOME=/usr/local/cuda-12.3
+ENV PATH=${CUDA_PATH}/bin:${PATH}
+ENV LD_LIBRARY_PATH=${CUDA_PATH}/lib64:${LD_LIBRARY_PATH}
+ENV CUPY_ACCELERATORS=cub
+
 # Comando por defecto
 CMD ["python"]
 
