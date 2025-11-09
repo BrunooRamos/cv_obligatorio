@@ -167,7 +167,7 @@ def compute_distance_matrix_fast(
     query_texture: np.ndarray,
     gallery_color: np.ndarray,
     gallery_texture: np.ndarray,
-    alpha: float = 0.5,
+    alpha: Union[float, np.ndarray] = 0.5,
     metric: str = 'cityblock'
 ) -> np.ndarray:
     """
@@ -178,7 +178,7 @@ def compute_distance_matrix_fast(
         query_texture: Query texture features (n_query, texture_dim)
         gallery_color: Gallery color features (n_gallery, color_dim)
         gallery_texture: Gallery texture features (n_gallery, texture_dim)
-        alpha: Gating weight (scalar only)
+        alpha: Gating weight (scalar or array of n_query alphas for adaptive gating)
         metric: scipy distance metric ('cityblock', 'euclidean', 'cosine')
 
     Returns:
@@ -189,7 +189,20 @@ def compute_distance_matrix_fast(
     dist_texture = cdist(query_texture, gallery_texture, metric=metric)
 
     # Combine with gating
-    dist_matrix = alpha * dist_texture + (1 - alpha) * dist_color
+    if isinstance(alpha, (int, float)):
+        # Scalar alpha: same weight for all queries
+        dist_matrix = alpha * dist_texture + (1 - alpha) * dist_color
+    else:
+        # Adaptive alpha: different weight per query
+        # alpha is (n_query,) array
+        alpha = np.asarray(alpha)
+        if alpha.ndim == 0:
+            alpha = alpha.item()
+            dist_matrix = alpha * dist_texture + (1 - alpha) * dist_color
+        else:
+            # Reshape alpha to (n_query, 1) for broadcasting
+            alpha = alpha.reshape(-1, 1)
+            dist_matrix = alpha * dist_texture + (1 - alpha) * dist_color
 
     return dist_matrix
 
