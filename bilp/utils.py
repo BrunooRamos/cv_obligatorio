@@ -8,6 +8,7 @@ import os
 from typing import Tuple, Optional, Dict
 from .color import extract_color_features
 from .texture import extract_texture_features, build_gabor_bank
+from .gpu_utils import get_device
 
 
 def normalize_l1(features: np.ndarray, epsilon: float = 1e-10) -> np.ndarray:
@@ -129,7 +130,8 @@ def extract_bilp_descriptor(
     color_params: Optional[Dict] = None,
     texture_params: Optional[Dict] = None,
     normalize: bool = True,
-    normalize_method: str = 'l1'
+    normalize_method: str = 'l1',
+    device: Optional = None
 ) -> Dict[str, np.ndarray]:
     """
     Extract complete BILP descriptor from image.
@@ -141,6 +143,7 @@ def extract_bilp_descriptor(
         texture_params: Parameters for texture feature extraction
         normalize: Whether to normalize features per stripe
         normalize_method: Normalization method ('l1', 'l2', 'power', 'l1_power')
+        device: GPU device (CuPy) or None for CPU
 
     Returns:
         Dictionary containing:
@@ -173,10 +176,11 @@ def extract_bilp_descriptor(
         **color_params
     )
 
-    # Extract texture features
+    # Extract texture features (use GPU if available)
     texture_features = extract_texture_features(
         image,
         n_stripes=n_stripes,
+        device=device,
         **texture_params
     )
 
@@ -215,7 +219,8 @@ def extract_bilp_batch(
     texture_params: Optional[Dict] = None,
     normalize: bool = True,
     normalize_method: str = 'l1',
-    verbose: bool = False
+    verbose: bool = False,
+    use_gpu: bool = False
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extract BILP descriptors from batch of images.
@@ -228,11 +233,19 @@ def extract_bilp_batch(
         normalize: Whether to normalize features per stripe
         normalize_method: Normalization method
         verbose: Print progress
+        use_gpu: Whether to use GPU if available
 
     Returns:
         color_features: (n_images, color_dim)
         texture_features: (n_images, texture_dim)
     """
+    # Get GPU device if requested
+    is_gpu, device = get_device(use_gpu)
+    if is_gpu and verbose:
+        print(f"Using GPU for feature extraction")
+    elif use_gpu and not is_gpu and verbose:
+        print(f"GPU requested but not available, using CPU")
+    
     color_features_list = []
     texture_features_list = []
 
@@ -246,7 +259,8 @@ def extract_bilp_batch(
             color_params=color_params,
             texture_params=texture_params,
             normalize=normalize,
-            normalize_method=normalize_method
+            normalize_method=normalize_method,
+            device=device
         )
 
         color_features_list.append(descriptor['color'])

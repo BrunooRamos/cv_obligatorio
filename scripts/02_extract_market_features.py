@@ -81,6 +81,11 @@ def parse_args() -> argparse.Namespace:
         action='store_true',
         help='Overwrite existing feature files.',
     )
+    parser.add_argument(
+        '--use-gpu',
+        action='store_true',
+        help='Use GPU for feature extraction if available (requires CuPy).',
+    )
     return parser.parse_args()
 
 
@@ -121,6 +126,7 @@ def extract_market1501_split(
     resize: Tuple[int, int],
     calibration_file: str,
     overwrite: bool,
+    use_gpu: bool = False,
 ) -> None:
     filename = f'market1501_{split}.npz'
     output_path = os.path.join(output_dir, filename)
@@ -178,6 +184,7 @@ def extract_market1501_split(
             normalize=True,
             normalize_method=normalize_method,
             verbose=False,
+            use_gpu=use_gpu,
         )
 
         color_features_batches.append(color_batch.astype(np.float32))
@@ -254,6 +261,7 @@ def main() -> None:
             resize=resize,
             calibration_file=args.calibration_file,
             overwrite=args.overwrite,
+            use_gpu=args.use_gpu,
         )
 
 

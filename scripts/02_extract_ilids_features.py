@@ -92,6 +92,11 @@ def parse_args() -> argparse.Namespace:
         action='store_true',
         help='Print progress information.',
     )
+    parser.add_argument(
+        '--use-gpu',
+        action='store_true',
+        help='Use GPU for feature extraction if available (requires CuPy).',
+    )
     return parser.parse_args()
 
 
@@ -106,6 +111,7 @@ def aggregate_sequence_features(
     color_params: Dict,
     texture_params: Dict,
     normalize_method: str,
+    use_gpu: bool = False,
     normalize_final: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
     color_batch, texture_batch = extract_bilp_batch(
@@ -116,6 +122,7 @@ def aggregate_sequence_features(
         normalize=True,
         normalize_method=normalize_method,
         verbose=False,
+        use_gpu=use_gpu,
     )
 
     color_mean = np.mean(color_batch, axis=0)
@@ -141,6 +148,7 @@ def process_sequences(
     normalize_method: str,
     normalize_final: bool,
     verbose: bool,
+    use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, Dict[str, List]]:
     color_features: List[np.ndarray] = []
     texture_features: List[np.ndarray] = []
@@ -171,6 +179,7 @@ def process_sequences(
             color_params=color_params,
             texture_params=texture_params,
             normalize_method=normalize_method,
+            use_gpu=use_gpu,
             normalize_final=normalize_final,
         )
 
@@ -249,6 +258,7 @@ def main() -> None:
         normalize_method=args.normalize_method,
         normalize_final=args.normalize_final,
         verbose=args.verbose,
+        use_gpu=args.use_gpu,
     )
 
     color_gallery, texture_gallery, meta_gallery = process_sequences(
@@ -260,6 +270,7 @@ def main() -> None:
         normalize_method=args.normalize_method,
         normalize_final=args.normalize_final,
         verbose=args.verbose,
+        use_gpu=args.use_gpu,
     )
 
     meta_query.update({
