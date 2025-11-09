@@ -2,78 +2,12 @@
 
 Esta guía explica cómo configurar y ejecutar el proyecto BILP en una VM de Google Cloud con GPU usando Docker.
 
-## Especificaciones de la VM Recomendada
-
-**Tipo de máquina:** g2-standard-4
-- **CPU:** 4 vCPUs (Intel Cascade Lake)
-- **Memoria:** 16 GB RAM
-- **GPU:** 1 x NVIDIA L4 (24 GB VRAM)
-- **Arquitectura:** x86-64
-
 ## Requisitos Previos
 
-- Cuenta de Google Cloud Platform (GCP) activa
-- Proyecto de GCP creado
-- Permisos para crear instancias de VM con GPU
+- VM de Google Cloud con GPU (NVIDIA T4, V100, etc.)
+- CUDA instalado en la VM
+- Docker instalado
 - Acceso SSH a la VM
-
----
-
-## Paso 0: Crear la VM en GCP
-
-### 0.1 Crear la instancia desde la consola web
-
-1. Ve a [Google Cloud Console](https://console.cloud.google.com/)
-2. Navega a **Compute Engine** > **VM instances**
-3. Haz clic en **CREATE INSTANCE**
-4. Configura la instancia:
-   - **Name:** `bilp-gpu-vm` (o el nombre que prefieras)
-   - **Region:** Selecciona una región con disponibilidad de L4 (ej: `us-central1`, `us-east1`, `europe-west4`)
-   - **Zone:** Selecciona una zona (ej: `us-central1-a`)
-   - **Machine family:** General-purpose
-   - **Machine type:** `g2-standard-4` (4 vCPUs, 16 GB RAM)
-   - **GPU:** 
-     - Tipo: `NVIDIA L4`
-     - Cantidad: `1`
-   - **Boot disk:** 
-     - OS: **Ubuntu 22.04 LTS** o **Ubuntu 20.04 LTS**
-     - Tipo: **Balanced persistent disk**
-     - Tamaño: **50 GB** (mínimo recomendado)
-   - **Firewall:** Marca **Allow HTTP traffic** y **Allow HTTPS traffic** (opcional)
-5. Haz clic en **CREATE**
-
-**Nota:** La creación de la VM puede tardar varios minutos. Las GPUs en GCP requieren aprobación de cuota.
-
-### 0.2 Crear la instancia desde gcloud CLI
-
-```bash
-# Configurar proyecto
-gcloud config set project TU-PROJECT-ID
-
-# Crear VM con GPU L4
-gcloud compute instances create bilp-gpu-vm \
-  --zone=us-central1-a \
-  --machine-type=g2-standard-4 \
-  --accelerator=type=nvidia-l4,count=1 \
-  --image-family=ubuntu-2204-lts \
-  --image-project=ubuntu-os-cloud \
-  --boot-disk-size=50GB \
-  --boot-disk-type=pd-balanced \
-  --maintenance-policy=TERMINATE \
-  --restart-on-failure
-```
-
-### 0.3 Verificar que la VM tiene GPU
-
-```bash
-# Conectarse a la VM
-gcloud compute ssh bilp-gpu-vm --zone=us-central1-a
-
-# Verificar GPU (debe mostrar NVIDIA L4)
-nvidia-smi
-```
-
-Si `nvidia-smi` no funciona, necesitas instalar los drivers de NVIDIA (ver Paso 1.1).
 
 ---
 
@@ -82,63 +16,10 @@ Si `nvidia-smi` no funciona, necesitas instalar los drivers de NVIDIA (ver Paso 
 ### 1.1 Conectarse a la VM
 
 ```bash
-gcloud compute ssh bilp-gpu-vm --zone=us-central1-a
+gcloud compute ssh nombre-de-tu-vm --zone=us-central1-a
 ```
 
-### 1.2 Instalar Drivers de NVIDIA (si no están instalados)
-
-Las imágenes de Ubuntu en GCP generalmente no incluyen los drivers de NVIDIA. Necesitas instalarlos:
-
-```bash
-# Actualizar sistema
-sudo apt-get update
-sudo apt-get upgrade -y
-
-# Instalar drivers de NVIDIA (para Ubuntu 22.04)
-# Para Ubuntu 20.04, usa: ubuntu-drivers install nvidia-driver-535
-sudo apt-get install -y ubuntu-drivers-common
-sudo ubuntu-drivers install
-
-# O instalar versión específica (recomendado para L4)
-sudo apt-get install -y nvidia-driver-535 nvidia-dkms-535
-
-# Reiniciar la VM
-sudo reboot
-```
-
-**Después del reinicio**, reconéctate y verifica:
-
-```bash
-# Verificar drivers instalados
-nvidia-smi
-
-# Debe mostrar algo como:
-# NVIDIA-SMI 535.xx.xx   Driver Version: 535.xx.xx   CUDA Version: 12.x
-```
-
-**Nota:** Si usas una imagen de GCP con CUDA preinstalado (como `cuda-12-0-ubuntu-2204`), puedes saltar este paso.
-
-### 1.3 Instalar CUDA Toolkit (si no está instalado)
-
-Si `nvidia-smi` muestra CUDA Version pero necesitas el toolkit completo:
-
-```bash
-# Para CUDA 12.x (recomendado para L4)
-wget https://developer.download.nvidia.com/compute/cuda/12.3.0/local_installers/cuda_12.3.0_545.23.06_linux.run
-sudo sh cuda_12.3.0_545.23.06_linux.run --silent --toolkit
-
-# Agregar CUDA al PATH
-echo 'export PATH=/usr/local/cuda-12.3/bin:$PATH' >> ~/.bashrc
-echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
-source ~/.bashrc
-
-# Verificar instalación
-nvcc --version
-```
-
-**Nota:** En GCP, generalmente CUDA viene preinstalado. Verifica primero con `nvcc --version`.
-
-### 1.4 Instalar Docker (si no está instalado)
+### 1.2 Instalar Docker (si no está instalado)
 
 ```bash
 # Actualizar sistema
@@ -155,34 +36,65 @@ newgrp docker
 
 ### 1.3 Instalar NVIDIA Container Toolkit
 
+**Para Ubuntu 20.04/22.04:**
+
 ```bash
-# Configurar repositorio
+# Configurar repositorio (método moderno sin apt-key)
 distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
 # Instalar
 sudo apt-get update
 sudo apt-get install -y nvidia-container-toolkit
 
-# Reiniciar Docker
+# Configurar runtime
+sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
 ```
 
-### 1.5 Verificar GPU en Docker
+**Para Debian Bookworm (o si el método anterior no funciona):**
 
 ```bash
-# Verificar que Docker puede acceder a la GPU
-# Usa la imagen de CUDA que corresponda a tu versión instalada
-docker run --rm --gpus all nvidia/cuda:12.3.0-base-ubuntu22.04 nvidia-smi
+# Método alternativo para Debian Bookworm
+# Primero, instalar dependencias necesarias
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+
+# Descargar y agregar la clave GPG usando el método moderno
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+
+# Agregar el repositorio (usar ubuntu22.04 como base, funciona en Debian Bookworm)
+echo "deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://nvidia.github.io/libnvidia-container/stable/ubuntu22.04/$(ARCH) /" | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+# O usar el método de instalación directo recomendado por NVIDIA
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+# Instalar
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+
+# Configurar runtime de Docker
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
 ```
 
-Si ves la salida de `nvidia-smi` mostrando la GPU L4, Docker está configurado correctamente.
+**Nota:** Si tu distribución no está soportada oficialmente, puedes usar el repositorio de Ubuntu 22.04 que generalmente funciona en Debian Bookworm.
 
-**Troubleshooting:** Si obtienes un error, verifica:
-1. NVIDIA Container Toolkit está instalado: `dpkg -l | grep nvidia-container-toolkit`
-2. Docker está corriendo: `sudo systemctl status docker`
-3. Reinicia Docker: `sudo systemctl restart docker`
+### 1.4 Verificar GPU en Docker
+
+```bash
+docker run --rm --gpus all nvidia/cuda:11.0.3-base-ubuntu20.04 nvidia-smi
+```
+
+Si ves la salida de `nvidia-smi`, la GPU está funcionando correctamente en Docker.
 
 ---
 
@@ -262,11 +174,41 @@ docker images | grep cv-bilp
 
 ## Paso 5: Instalar CuPy en el Contenedor
 
-### 5.1 Construir imagen con GPU
+### 5.1 Crear un Dockerfile con CuPy
 
-El proyecto ya incluye un `Dockerfile.gpu` configurado para CUDA 12.x (compatible con NVIDIA L4).
+Crea un archivo `Dockerfile.gpu` basado en el Dockerfile original pero con CuPy:
 
-**Nota:** Si tu VM usa CUDA 11.x, edita `Dockerfile.gpu` y cambia `cupy-cuda12x` por `cupy-cuda11x`.
+```dockerfile
+# Dockerfile.gpu
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements
+COPY requirements.txt .
+
+# Instalar dependencias Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Instalar CuPy (ajusta según tu versión de CUDA)
+# Para CUDA 11.x:
+RUN pip install cupy-cuda11x
+
+# Para CUDA 12.x (descomenta si usas CUDA 12):
+# RUN pip install cupy-cuda12x
+
+CMD ["python"]
+```
 
 ### 5.2 Construir imagen con GPU
 
@@ -396,176 +338,30 @@ gsutil -m cp -r data/results gs://tu-bucket/results/
 
 ---
 
-## Ajustes Necesarios en la VM
-
-### Configuración de Memoria y Swap
-
-Para una VM g2-standard-4 con 16 GB RAM, es recomendable configurar swap para evitar problemas de memoria:
-
-```bash
-# Verificar espacio en disco disponible
-df -h
-
-# Crear archivo de swap (4 GB recomendado)
-sudo fallocate -l 4G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-
-# Hacer el swap permanente
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-
-# Verificar que el swap está activo
-free -h
-```
-
-### Optimización de Docker
-
-Configura Docker para usar más memoria si es necesario:
-
-```bash
-# Editar configuración de Docker
-sudo nano /etc/docker/daemon.json
-```
-
-Agrega (o modifica) el siguiente contenido:
-
-```json
-{
-  "default-runtime": "nvidia",
-  "runtimes": {
-    "nvidia": {
-      "path": "nvidia-container-runtime",
-      "runtimeArgs": []
-    }
-  },
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  }
-}
-```
-
-Reinicia Docker:
-
-```bash
-sudo systemctl restart docker
-```
-
-### Configuración de GPU
-
-Para optimizar el rendimiento de la GPU L4:
-
-```bash
-# Verificar modo de rendimiento de la GPU
-sudo nvidia-smi -pm 1  # Habilitar modo de rendimiento persistente
-
-# Verificar que la GPU está en modo de rendimiento máximo
-nvidia-smi -q | grep Performance
-```
-
-### Variables de Entorno Recomendadas
-
-Agrega estas variables a tu `~/.bashrc`:
-
-```bash
-# CUDA paths (ajusta según tu versión de CUDA)
-export PATH=/usr/local/cuda-12.3/bin:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64:$LD_LIBRARY_PATH
-
-# CuPy memory pool (opcional, para mejor gestión de memoria)
-export CUPY_ACCELERATORS=cub
-
-# Python optimizaciones
-export PYTHONUNBUFFERED=1
-```
-
-Recarga la configuración:
-
-```bash
-source ~/.bashrc
-```
-
-### Verificación Final de la Configuración
-
-Ejecuta este script para verificar que todo está configurado correctamente:
-
-```bash
-#!/bin/bash
-echo "=== Verificando configuración de la VM ==="
-echo ""
-
-echo "1. GPU disponible:"
-nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader
-
-echo ""
-echo "2. CUDA disponible:"
-nvcc --version 2>/dev/null || echo "CUDA toolkit no encontrado (puede estar bien si solo usas drivers)"
-
-echo ""
-echo "3. Docker con acceso a GPU:"
-docker run --rm --gpus all nvidia/cuda:12.3.0-base-ubuntu22.04 nvidia-smi --query-gpu=name --format=csv,noheader
-
-echo ""
-echo "4. Memoria disponible:"
-free -h
-
-echo ""
-echo "5. Espacio en disco:"
-df -h /
-
-echo ""
-echo "6. NVIDIA Container Toolkit:"
-dpkg -l | grep nvidia-container-toolkit || echo "No instalado"
-
-echo ""
-echo "=== Verificación completa ==="
-```
-
-Guarda este script como `check_setup.sh`, hazlo ejecutable y ejecútalo:
-
-```bash
-chmod +x check_setup.sh
-./check_setup.sh
-```
-
----
-
 ## Troubleshooting
 
 ### Error: "CUDA not available"
 
 **Solución:** Verifica que:
-1. La VM tenga GPU asignada: `nvidia-smi` debe mostrar L4
-2. Drivers de NVIDIA instalados: `nvidia-smi` funciona
-3. NVIDIA Container Toolkit esté instalado: `dpkg -l | grep nvidia-container-toolkit`
-4. Docker tenga acceso a GPU: `docker run --rm --gpus all nvidia/cuda:12.3.0-base-ubuntu22.04 nvidia-smi`
-5. Reinicia Docker si es necesario: `sudo systemctl restart docker`
+1. La VM tenga GPU asignada
+2. NVIDIA Container Toolkit esté instalado
+3. Docker tenga acceso a GPU: `docker run --gpus all nvidia/cuda:11.0.3-base-ubuntu20.04 nvidia-smi`
 
-### Error: "CuPy not installed" o "CuPy CUDA version mismatch"
+### Error: "CuPy not installed"
 
-**Solución:** 
-1. Verifica la versión de CUDA en la VM: `nvcc --version` o `nvidia-smi`
-2. Si usas CUDA 12.x, el Dockerfile.gpu ya está configurado correctamente
-3. Si usas CUDA 11.x, edita `Dockerfile.gpu` y cambia `cupy-cuda12x` por `cupy-cuda11x`
-4. Reconstruye la imagen: `docker build -f Dockerfile.gpu -t cv-bilp-gpu .`
-
-### Error: "Out of memory" en GPU
-
-**Solución:** 
-- NVIDIA L4 tiene 24 GB VRAM, suficiente para este proyecto
-- Si ocurre, reduce el batch size:
+**Solución:** Instala CuPy en el contenedor:
 ```bash
---batch-size 32  # en lugar de 64 o 128
+docker run --gpus all -it --rm \
+  -v $(pwd):/app \
+  cv-bilp-gpu pip install cupy-cuda11x
 ```
 
-### Error: "VM no tiene GPU asignada"
+### Error: "Out of memory"
 
-**Solución:**
-1. Verifica en GCP Console que la VM tiene GPU L4 asignada
-2. Si no la tiene, detén la VM y edítala para agregar GPU
-3. Las GPUs en GCP requieren aprobación de cuota - solicítala si es necesario
+**Solución:** Reduce el batch size:
+```bash
+--batch-size 32  # en lugar de 128
+```
 
 ### Error: "Dataset not found"
 
@@ -584,51 +380,33 @@ docker run --gpus all -it --rm \
 
 ```bash
 # Desde tu máquina local
-gcloud compute instances stop bilp-gpu-vm --zone=us-central1-a
+gcloud compute instances stop nombre-vm --zone=us-central1-a
 ```
-
-**Importante:** Detener la VM evita cargos por GPU y CPU, pero el disco persistente sigue generando costos menores.
 
 ### Iniciar la VM:
 
 ```bash
-gcloud compute instances start bilp-gpu-vm --zone=us-central1-a
+gcloud compute instances start nombre-vm --zone=us-central1-a
 ```
-
-**Nota:** Al iniciar la VM, espera 1-2 minutos para que los servicios se inicialicen antes de conectarte.
 
 ### Monitorear uso de GPU:
 
 ```bash
-# En la VM
 watch -n 1 nvidia-smi
-
-# O ver uso de recursos del sistema
-htop
 ```
-
-### Costos estimados (aproximados, varían por región):
-
-- **g2-standard-4 con L4:** ~$1.20-1.50 USD/hora
-- **Disco persistente (50 GB):** ~$0.17 USD/mes
-- **Tráfico de red:** Varía según uso
-
-**Recomendación:** Detén la VM cuando no la uses para minimizar costos. El pipeline completo toma ~1 hora, así que puedes ejecutarlo y detener la VM inmediatamente después.
 
 ---
 
 ## Tiempos Estimados
 
-Con GPU **NVIDIA L4** (g2-standard-4):
-- Calibración: ~3-5 minutos
-- Extracción Market-1501 (33k imágenes): ~25-40 minutos
-- Evaluación Market-1501: ~1-3 minutos
-- Extracción iLIDS-VID: ~8-12 minutos
+Con GPU (NVIDIA T4):
+- Calibración: ~5 minutos
+- Extracción Market-1501 (33k imágenes): ~30-45 minutos
+- Evaluación Market-1501: ~2-5 minutos
+- Extracción iLIDS-VID: ~10-15 minutos
 - Evaluación iLIDS-VID: ~1-2 minutos
 
-**Total estimado:** ~45 minutos - 1 hora (vs ~5-6 horas en CPU)
-
-**Nota:** NVIDIA L4 es más rápida que T4, especialmente en operaciones de memoria y cómputo de punto flotante.
+**Total estimado:** ~1-1.5 horas (vs ~5-6 horas en CPU)
 
 ---
 

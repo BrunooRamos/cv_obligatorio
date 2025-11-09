@@ -3,7 +3,7 @@ GPU utilities for BILP feature extraction using CuPy
 """
 
 import numpy as np
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, Any
 
 # Try to import CuPy
 try:
@@ -14,7 +14,7 @@ except ImportError:
     cp = None
 
 
-def get_device(use_gpu: bool = True) -> Tuple[bool, Optional]:
+def get_device(use_gpu: bool = True) -> Tuple[bool, Optional[Any]]:
     """
     Get the appropriate device (CPU or GPU) based on availability.
     
@@ -66,7 +66,7 @@ def to_cpu(array: Union[np.ndarray, 'cp.ndarray']) -> np.ndarray:
     return np.asarray(array)
 
 
-def get_array_module(device) -> Union:
+def get_array_module(device) -> Any:
     """
     Get the appropriate array module (CuPy or NumPy).
     

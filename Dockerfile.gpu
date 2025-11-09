@@ -20,13 +20,12 @@ COPY requirements.txt .
 # Instalar las librerías de Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Instalar CuPy para CUDA 12.x (compatible con NVIDIA L4 en GCP)
-# NVIDIA L4 funciona con CUDA 11.8+ y CUDA 12.x
-# GCP g2-standard-4 con L4 generalmente usa CUDA 12.x
-RUN pip install --no-cache-dir cupy-cuda12x
+# Instalar CuPy (ajusta según tu versión de CUDA)
+# Para CUDA 11.x (descomenta la línea correspondiente):
+RUN pip install --no-cache-dir cupy-cuda11x
 
-# Si necesitas CUDA 11.x, descomenta la siguiente línea y comenta la anterior:
-# RUN pip install --no-cache-dir cupy-cuda11x
+# Para CUDA 12.x (descomenta si usas CUDA 12):
+# RUN pip install --no-cache-dir cupy-cuda12x
 
 # Comando por defecto
 CMD ["python"]
