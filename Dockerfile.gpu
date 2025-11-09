@@ -1,5 +1,17 @@
 # Dockerfile with GPU support (CuPy)
-FROM python:3.11-slim
+# Use CUDA base image to ensure CUDA libraries are available
+FROM nvidia/cuda:12.3.0-runtime-ubuntu22.04
+
+# Install Python 3.11
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symlinks for python
+RUN ln -s /usr/bin/python3.11 /usr/bin/python && \
+    ln -s /usr/bin/python3.11 /usr/bin/python3
 
 # Establecer el directorio de trabajo
 WORKDIR /app
@@ -18,14 +30,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # Instalar las librerías de Python
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Instalar CuPy (ajusta según tu versión de CUDA)
-# Para CUDA 11.x (descomenta la línea correspondiente):
-RUN pip install --no-cache-dir cupy-cuda11x
-
-# Para CUDA 12.x (descomenta si usas CUDA 12):
-# RUN pip install --no-cache-dir cupy-cuda12x
+# Instalar CuPy para CUDA 12.x (compatible con la imagen base CUDA 12.3.0)
+RUN pip3 install --no-cache-dir cupy-cuda12x
 
 # Comando por defecto
 CMD ["python"]
