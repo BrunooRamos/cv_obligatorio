@@ -159,25 +159,55 @@ def convolve_gpu(
     image_gpu = to_gpu(image, device)
     kernel_gpu = to_gpu(kernel, device)
     
-    # CuPy doesn't have direct convolution, use FFT-based convolution
-    # Pad kernel to match image size
     h, w = image_gpu.shape
     k_h, k_w = kernel_gpu.shape
     
-    # Pad kernel
-    pad_h = (h - k_h) // 2
-    pad_w = (w - k_w) // 2
+    # If kernel is larger than image, fall back to CPU convolution
+    # or pad image instead of kernel
+    if k_h > h or k_w > w:
+        # Pad image to be at least as large as kernel
+        pad_h_before = max(0, (k_h - h + 1) // 2)
+        pad_h_after = max(0, k_h - h - pad_h_before)
+        pad_w_before = max(0, (k_w - w + 1) // 2)
+        pad_w_after = max(0, k_w - w - pad_w_before)
+        
+        image_padded = xp.pad(
+            image_gpu,
+            ((pad_h_before, pad_h_after), (pad_w_before, pad_w_after)),
+            mode='constant'
+        )
+        h_padded, w_padded = image_padded.shape
+    else:
+        image_padded = image_gpu
+        h_padded, w_padded = h, w
+    
+    # Pad kernel to match (padded) image size for FFT-based convolution
+    pad_h = (h_padded - k_h) // 2
+    pad_w = (w_padded - k_w) // 2
+    pad_h_after = h_padded - k_h - pad_h
+    pad_w_after = w_padded - k_w - pad_w
+    
     kernel_padded = xp.pad(
         kernel_gpu,
-        ((pad_h, h - k_h - pad_h), (pad_w, w - k_w - pad_w)),
+        ((pad_h, pad_h_after), (pad_w, pad_w_after)),
         mode='constant'
     )
     
     # FFT-based convolution
-    image_fft = xp.fft.fft2(image_gpu)
+    image_fft = xp.fft.fft2(image_padded)
     kernel_fft = xp.fft.fft2(kernel_padded)
     result_fft = image_fft * kernel_fft
     result = xp.real(xp.fft.ifft2(result_fft))
+    
+    # Crop result back to original image size
+    if k_h > h or k_w > w:
+        # Extract center region matching original image size
+        start_h = (result.shape[0] - h) // 2
+        start_w = (result.shape[1] - w) // 2
+        result = result[start_h:start_h+h, start_w:start_w+w]
+    else:
+        # Result should already match original size
+        result = result[:h, :w]
     
     # Transfer back to CPU
     return to_cpu(result)
@@ -224,22 +254,52 @@ def batch_convolve_gpu(
         img_results = []
         for kernel in kernels:
             kernel_gpu = to_gpu(kernel, device)
-            
-            # Pad kernel
             k_h, k_w = kernel_gpu.shape
-            pad_h = (h - k_h) // 2
-            pad_w = (w - k_w) // 2
+            
+            # Handle case where kernel is larger than image
+            if k_h > h or k_w > w:
+                # Pad image to be at least as large as kernel
+                pad_h_before = max(0, (k_h - h + 1) // 2)
+                pad_h_after = max(0, k_h - h - pad_h_before)
+                pad_w_before = max(0, (k_w - w + 1) // 2)
+                pad_w_after = max(0, k_w - w - pad_w_before)
+                
+                img_padded = xp.pad(
+                    img,
+                    ((pad_h_before, pad_h_after), (pad_w_before, pad_w_after)),
+                    mode='constant'
+                )
+                h_padded, w_padded = img_padded.shape
+            else:
+                img_padded = img
+                h_padded, w_padded = h, w
+            
+            # Pad kernel to match (padded) image size
+            pad_h = (h_padded - k_h) // 2
+            pad_w = (w_padded - k_w) // 2
+            pad_h_after = h_padded - k_h - pad_h
+            pad_w_after = w_padded - k_w - pad_w
+            
             kernel_padded = xp.pad(
                 kernel_gpu,
-                ((pad_h, h - k_h - pad_h), (pad_w, w - k_w - pad_w)),
+                ((pad_h, pad_h_after), (pad_w, pad_w_after)),
                 mode='constant'
             )
             
             # FFT-based convolution
-            img_fft = xp.fft.fft2(img)
+            img_fft = xp.fft.fft2(img_padded)
             kernel_fft = xp.fft.fft2(kernel_padded)
             result_fft = img_fft * kernel_fft
             result = xp.real(xp.fft.ifft2(result_fft))
+            
+            # Crop result back to original image size
+            if k_h > h or k_w > w:
+                start_h = (result.shape[0] - h) // 2
+                start_w = (result.shape[1] - w) // 2
+                result = result[start_h:start_h+h, start_w:start_w+w]
+            else:
+                result = result[:h, :w]
+            
             img_results.append(result)
         
         results.append(img_results)
