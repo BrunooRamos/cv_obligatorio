@@ -196,7 +196,20 @@ def compute_distance_matrix_fast(
         dist_texture = cdist(query_texture, gallery_texture, metric=metric)
 
     # Combine with gating
-    dist_matrix = alpha * dist_texture + (1 - alpha) * dist_color
+    if isinstance(alpha, (int, float)):
+        # Scalar alpha: same weight for all queries
+        dist_matrix = alpha * dist_texture + (1 - alpha) * dist_color
+    else:
+        # Adaptive alpha: different weight per query
+        # alpha is (n_query,) array
+        alpha = np.asarray(alpha)
+        if alpha.ndim == 0:
+            alpha = alpha.item()
+            dist_matrix = alpha * dist_texture + (1 - alpha) * dist_color
+        else:
+            # Reshape alpha to (n_query, 1) for broadcasting
+            alpha = alpha.reshape(-1, 1)
+            dist_matrix = alpha * dist_texture + (1 - alpha) * dist_color
 
     return dist_matrix
 

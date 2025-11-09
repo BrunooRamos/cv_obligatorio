@@ -230,7 +230,8 @@ def load_ilids_vid(
     num_frames: int = 10,
     sampling_strategy: str = 'uniform',
     resize: Optional[Tuple[int, int]] = (128, 64),
-    return_images: bool = False
+    return_images: bool = False,
+    verbose: bool = False
 ) -> List[Dict]:
     """
     Load iLIDS-VID dataset sequences.
@@ -241,6 +242,7 @@ def load_ilids_vid(
         sampling_strategy: 'uniform', 'random', or 'all'
         resize: Target size (width, height) or None to keep original
         return_images: If True, load actual images; otherwise just metadata
+        verbose: If True, print progress information
 
     Returns:
         List of dictionaries, one per sequence (person + camera combination)
@@ -293,7 +295,8 @@ def load_ilids_vid(
                 for frame_path in sampled_paths:
                     img = cv2.imread(frame_path)
                     if img is None:
-                        print(f"Warning: Could not load frame {frame_path}")
+                        if verbose:
+                            print(f"Warning: Could not load frame {frame_path}")
                         continue
 
                     # Convert BGR to RGB
@@ -308,7 +311,8 @@ def load_ilids_vid(
 
             data.append(sequence_info)
 
-    print(f"Loaded {len(data)} sequences from iLIDS-VID ({num_frames} frames each)")
+    if verbose:
+        print(f"Loaded {len(data)} sequences from iLIDS-VID ({num_frames} frames each)")
     return data
 
 

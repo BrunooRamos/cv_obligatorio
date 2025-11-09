@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--dataset-path',
         type=str,
-        default='/datasets/iLIDS-VID',
+        default='datasets/iLIDS-VID',
         help='Path to the root directory of the iLIDS-VID dataset.',
     )
     parser.add_argument(
@@ -71,6 +71,12 @@ def parse_args() -> argparse.Namespace:
         help='Normalization method applied per stripe before pooling.',
     )
     parser.add_argument(
+        '--normalize-final',
+        action='store_true',
+        default=False,
+        help='Apply L1 normalization after averaging frames (default: False).',
+    )
+    parser.add_argument(
         '--calibration-file',
         type=str,
         default='data/color_ranges_market.json',
@@ -106,6 +112,7 @@ def aggregate_sequence_features(
     texture_params: Dict,
     normalize_method: str,
     use_gpu: bool = False,
+    normalize_final: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
     color_batch, texture_batch = extract_bilp_batch(
         frames,
@@ -121,8 +128,13 @@ def aggregate_sequence_features(
     color_mean = np.mean(color_batch, axis=0)
     texture_mean = np.mean(texture_batch, axis=0)
 
-    color_mean = normalize_l1(color_mean).astype(np.float32)
-    texture_mean = normalize_l1(texture_mean).astype(np.float32)
+    # Optional final L1 normalization after averaging
+    if normalize_final:
+        color_mean = normalize_l1(color_mean).astype(np.float32)
+        texture_mean = normalize_l1(texture_mean).astype(np.float32)
+    else:
+        color_mean = color_mean.astype(np.float32)
+        texture_mean = texture_mean.astype(np.float32)
 
     return color_mean, texture_mean
 
@@ -134,6 +146,7 @@ def process_sequences(
     color_params: Dict,
     texture_params: Dict,
     normalize_method: str,
+    normalize_final: bool,
     verbose: bool,
     use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, Dict[str, List]]:
@@ -150,6 +163,9 @@ def process_sequences(
         'paths': [],
     }
 
+    if verbose:
+        print(f"Processing {len(sequences)} sequences for camera {camera_id}...")
+
     for idx, sequence in enumerate(sequences):
         frames = sequence.get('frames', [])
         if not frames:
@@ -164,6 +180,7 @@ def process_sequences(
             texture_params=texture_params,
             normalize_method=normalize_method,
             use_gpu=use_gpu,
+            normalize_final=normalize_final,
         )
 
         color_features.append(color_vec)
@@ -179,7 +196,7 @@ def process_sequences(
         metadata['filenames'].append(os.path.basename(first_frame))
         metadata['paths'].append(first_frame)
 
-        if verbose and (idx + 1) % 50 == 0:
+        if verbose and (idx + 1) % 10 == 0:
             print(f"Processed {idx + 1}/{len(sequences)} sequences for camera {camera_id}")
 
     if not color_features:
@@ -204,6 +221,7 @@ def main() -> None:
         num_frames=args.num_frames,
         sampling_strategy=args.sampling_strategy,
         return_images=True,
+        verbose=args.verbose,
     )
 
     if args.verbose:
@@ -238,6 +256,7 @@ def main() -> None:
         color_params=color_params,
         texture_params=texture_params,
         normalize_method=args.normalize_method,
+        normalize_final=args.normalize_final,
         verbose=args.verbose,
         use_gpu=args.use_gpu,
     )
@@ -249,6 +268,7 @@ def main() -> None:
         color_params=color_params,
         texture_params=texture_params,
         normalize_method=args.normalize_method,
+        normalize_final=args.normalize_final,
         verbose=args.verbose,
         use_gpu=args.use_gpu,
     )
@@ -256,6 +276,7 @@ def main() -> None:
     meta_query.update({
         'n_stripes': args.n_stripes,
         'normalize_method': args.normalize_method,
+        'normalize_final': args.normalize_final,
         'sampling_strategy': args.sampling_strategy,
         'num_sampled_frames': args.num_frames,
         'calibration_file': os.path.abspath(args.calibration_file),
@@ -264,6 +285,7 @@ def main() -> None:
     meta_gallery.update({
         'n_stripes': args.n_stripes,
         'normalize_method': args.normalize_method,
+        'normalize_final': args.normalize_final,
         'sampling_strategy': args.sampling_strategy,
         'num_sampled_frames': args.num_frames,
         'calibration_file': os.path.abspath(args.calibration_file),
@@ -277,6 +299,9 @@ def main() -> None:
             raise FileExistsError(f"Query features file already exists: {query_path} (use --overwrite to replace)")
         if os.path.exists(gallery_path):
             raise FileExistsError(f"Gallery features file already exists: {gallery_path} (use --overwrite to replace)")
+
+    if args.verbose:
+        print("Saving features to disk...")
 
     save_features(query_path, color_query, texture_query, meta_query)
     save_features(gallery_path, color_gallery, texture_gallery, meta_gallery)
