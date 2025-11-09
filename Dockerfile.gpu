@@ -1,6 +1,6 @@
 # Dockerfile with GPU support (CuPy)
-# Use CUDA base image to ensure CUDA libraries are available
-FROM nvidia/cuda:12.3.0-runtime-ubuntu22.04
+# Use CUDA devel image to ensure CUDA toolkit and headers are available
+FROM nvidia/cuda:12.3.0-devel-ubuntu22.04
 
 # Install Python 3.11
 RUN apt-get update && apt-get install -y \
