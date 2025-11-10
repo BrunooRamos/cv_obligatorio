@@ -11,4 +11,13 @@ matplotlib
 # Note: torch and torchvision are installed separately in Dockerfile.gpu with CUDA support
 # torchreid latest version is 0.2.5 (as of 2024)
 torchreid>=0.2.0
-gdown  # Required dependency for torchreid
+# Required dependencies for torchreid
+gdown
+tensorboard
+yacs  # Configuration management
+termcolor  # Terminal colors
+tabulate  # Table formatting
+pyyaml  # YAML parsing
+tqdm  # Progress bars
+h5py  # HDF5 file support
+# Note: faiss is optional and only needed for certain torchreid features, skipping for now
