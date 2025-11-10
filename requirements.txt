@@ -11,3 +11,4 @@ matplotlib
 # Note: torch and torchvision are installed separately in Dockerfile.gpu with CUDA support
 # torchreid latest version is 0.2.5 (as of 2024)
 torchreid>=0.2.0
+gdown  # Required dependency for torchreid
