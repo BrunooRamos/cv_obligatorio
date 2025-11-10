@@ -35,7 +35,13 @@ def parse_args() -> argparse.Namespace:
         '--alpha',
         type=float,
         default=0.5,
-        help='Gating weight between texture (alpha) and color (1-alpha).',
+        help='Fixed gating weight between texture (alpha) and color (1-alpha). Only used if --gating-params is not provided.',
+    )
+    parser.add_argument(
+        '--gating-params',
+        type=str,
+        default=None,
+        help='Path to JSON file with optimized gating parameters (a1, a2, b). If provided, uses adaptive gating (alpha computed per image).',
     )
     parser.add_argument(
         '--metric',
@@ -149,12 +155,61 @@ def main() -> None:
     elif args.use_gpu and not is_gpu and args.verbose:
         print(f"GPU requested but not available, using CPU")
 
+    # Determine alpha: use adaptive gating if params provided, else use fixed alpha
+    if args.gating_params and os.path.exists(args.gating_params):
+        import json
+        with open(args.gating_params, 'r') as f:
+            gating_data = json.load(f)
+        
+        from bilp.gating import compute_gating_weights_batch
+        
+        gating_params = {
+            'a1': gating_data['a1'],
+            'a2': gating_data['a2'],
+            'b': gating_data['b']
+        }
+        
+        # Get normalization stats if available
+        t_stats = gating_data.get('normalization', {}).get('t_stats', None)
+        c_stats = gating_data.get('normalization', {}).get('c_stats', None)
+        
+        # Get n_stripes from metadata if available, otherwise use default
+        n_stripes = query_metadata.get('n_stripes', 6) if query_metadata else 6
+        
+        if args.verbose:
+            print(f"Using adaptive gating with params: {gating_params}")
+            if t_stats and c_stats:
+                print(f"Using normalization: T(mean={t_stats['mean']:.4f}, std={t_stats['std']:.4f}), "
+                      f"C(mean={c_stats['mean']:.4f}, std={c_stats['std']:.4f})")
+        
+        # Compute adaptive alpha for each query
+        query_alphas = compute_gating_weights_batch(
+            query_color,
+            query_texture,
+            gating_params,
+            n_stripes=n_stripes,
+            t_stats=t_stats,
+            c_stats=c_stats
+        )
+        
+        if args.verbose:
+            print(f"Alpha range: [{query_alphas.min():.3f}, {query_alphas.max():.3f}], mean: {query_alphas.mean():.3f}")
+        
+        alpha = query_alphas
+        alpha_str = f"adaptive (range: [{query_alphas.min():.3f}, {query_alphas.max():.3f}], mean: {query_alphas.mean():.3f})"
+    else:
+        # Use fixed alpha
+        alpha = args.alpha
+        alpha_str = f"fixed={alpha}"
+        if args.verbose:
+            print(f"Using fixed alpha: {alpha}")
+
     distance_matrix = compute_distance_matrix_fast(
         query_color,
         query_texture,
         gallery_color,
         gallery_texture,
-        alpha=args.alpha,
+        alpha=alpha,
         metric=args.metric,
         device=device,
     )
@@ -169,7 +224,7 @@ def main() -> None:
         max_rank=args.max_rank,
     )
 
-    print_results(results, dataset=f'Market-1501 (alpha={args.alpha}, metric={args.metric})')
+    print_results(results, dataset=f'Market-1501 (alpha={alpha_str}, metric={args.metric})')
 
     if args.save_results:
         save_dir = os.path.dirname(args.save_results)
