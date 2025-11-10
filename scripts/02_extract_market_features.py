@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+import time
 from typing import Dict, List, Tuple
 
 sys.path.append('/app')
@@ -86,6 +87,18 @@ def parse_args() -> argparse.Namespace:
         action='store_true',
         help='Use GPU for feature extraction if available (requires CuPy).',
     )
+    parser.add_argument(
+        '--verbose',
+        '-v',
+        action='store_true',
+        help='Enable verbose logging to show progress during processing.',
+    )
+    parser.add_argument(
+        '--log-interval',
+        type=int,
+        default=100,
+        help='Number of images processed before logging progress (only if --verbose is set).',
+    )
     return parser.parse_args()
 
 
@@ -127,6 +140,8 @@ def extract_market1501_split(
     calibration_file: str,
     overwrite: bool,
     use_gpu: bool = False,
+    verbose: bool = False,
+    log_interval: int = 100,
 ) -> None:
     filename = f'market1501_{split}.npz'
     output_path = os.path.join(output_dir, filename)
@@ -167,6 +182,13 @@ def extract_market1501_split(
     texture_features_batches: List[np.ndarray] = []
     processed_entries: List[Dict] = []
 
+    start_time = time.time()
+    last_log_time = start_time
+
+    if verbose:
+        print(f"Starting processing of {len(data)} images...")
+        print(f"Logging progress every {log_interval} images")
+
     for start in range(0, len(data), batch_size):
         end = min(start + batch_size, len(data))
         batch = data[start:end]
@@ -191,9 +213,32 @@ def extract_market1501_split(
         texture_features_batches.append(texture_batch.astype(np.float32))
         processed_entries.extend(valid_entries)
 
-        print(f"Processed {len(processed_entries)}/{len(data)} images", end='\r')
+        num_processed = len(processed_entries)
+        
+        # Logging periódico si verbose está activado
+        if verbose and num_processed % log_interval == 0:
+            current_time = time.time()
+            elapsed = current_time - start_time
+            batch_elapsed = current_time - last_log_time
+            rate = log_interval / batch_elapsed if batch_elapsed > 0 else 0
+            percentage = (num_processed / len(data)) * 100
+            remaining = len(data) - num_processed
+            eta = remaining / rate if rate > 0 else 0
+            
+            print(f"[{split}] Processed {num_processed}/{len(data)} images ({percentage:.1f}%) | "
+                  f"Rate: {rate:.1f} img/s | Elapsed: {elapsed:.1f}s | ETA: {eta:.1f}s")
+            last_log_time = current_time
+        elif not verbose:
+            # Si no está verbose, mostrar progreso simple en la misma línea
+            print(f"Processed {num_processed}/{len(data)} images", end='\r')
 
-    print()  # newline after progress
+    if not verbose:
+        print()  # newline after progress
+    else:
+        # Log final cuando termine
+        total_time = time.time() - start_time
+        print(f"[{split}] Completed! Processed {len(processed_entries)}/{len(data)} images in {total_time:.1f}s "
+              f"({len(processed_entries)/total_time:.1f} img/s average)")
 
     if not processed_entries:
         print(f"ERROR: No valid images were processed for split '{split}'.")
@@ -262,6 +307,8 @@ def main() -> None:
             calibration_file=args.calibration_file,
             overwrite=args.overwrite,
             use_gpu=args.use_gpu,
+            verbose=args.verbose,
+            log_interval=args.log_interval,
         )
 
 
