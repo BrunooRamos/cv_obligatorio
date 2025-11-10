@@ -230,12 +230,38 @@ def main() -> None:
     cam1_sequences = [seq for seq in sequences if seq['camera_id'] == 1]
     cam2_sequences = [seq for seq in sequences if seq['camera_id'] == 2]
 
+    # CRÍTICO: Ordenar por person_id para garantizar correspondencia 1:1
+    # query[i] debe corresponder a gallery[i] con el mismo person_id
+    cam1_sequences = sorted(cam1_sequences, key=lambda x: x['person_id'])
+    cam2_sequences = sorted(cam2_sequences, key=lambda x: x['person_id'])
+
     if args.verbose:
         print(f"Camera 1 sequences: {len(cam1_sequences)} (query)")
         print(f"Camera 2 sequences: {len(cam2_sequences)} (gallery)")
+        
+        # Verificar que los person_ids coincidan
+        cam1_ids = [seq['person_id'] for seq in cam1_sequences]
+        cam2_ids = [seq['person_id'] for seq in cam2_sequences]
+        if cam1_ids == cam2_ids:
+            print(f"✓ Person IDs están en el mismo orden (primeros 10: {cam1_ids[:10]})")
+        else:
+            print(f"✗ ADVERTENCIA: Person IDs NO están en el mismo orden!")
+            print(f"  Cam1 IDs (primeros 10): {cam1_ids[:10]}")
+            print(f"  Cam2 IDs (primeros 10): {cam2_ids[:10]}")
 
     if not cam1_sequences or not cam2_sequences:
         raise RuntimeError('Could not find both camera splits in the dataset. Check dataset structure.')
+    
+    # Verificar correspondencia 1:1
+    cam1_ids_set = set(seq['person_id'] for seq in cam1_sequences)
+    cam2_ids_set = set(seq['person_id'] for seq in cam2_sequences)
+    if cam1_ids_set != cam2_ids_set:
+        missing_in_cam2 = cam1_ids_set - cam2_ids_set
+        missing_in_cam1 = cam2_ids_set - cam1_ids_set
+        if missing_in_cam2:
+            print(f"WARNING: Person IDs en cam1 pero no en cam2: {sorted(missing_in_cam2)}")
+        if missing_in_cam1:
+            print(f"WARNING: Person IDs en cam2 pero no en cam1: {sorted(missing_in_cam1)}")
 
     u_range, v_range = load_calibrated_color_ranges(args.calibration_file)
     color_params = {
