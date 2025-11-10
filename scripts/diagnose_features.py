@@ -4,7 +4,9 @@ import argparse
 import os
 import sys
 
-sys.path.append('/app')
+# Add project root to path (works both in Docker and locally)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 import numpy as np
 from scipy.spatial.distance import cdist

@@ -47,6 +47,7 @@ data/*.npy
 data/*.pkl
 data/*.pickle
 data/features_*.npz
+data/features/*.npz
 data/results_*.npz
 
 # Keep calibration file

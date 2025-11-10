@@ -30,6 +30,29 @@ def get_device(use_gpu: bool = True) -> Tuple[bool, Optional[Any]]:
     try:
         # Check if GPU is available
         cp.cuda.Device(0).use()
+        
+        # Configure memory pool to use all available GPU memory
+        # Get total memory available
+        mempool = cp.get_default_memory_pool()
+        pinned_mempool = cp.get_default_pinned_memory_pool()
+        
+        # Set memory pool to use all available memory (no limit)
+        # This allows CuPy to use the full 2GB instead of default ~200MB
+        try:
+            # Get total memory and set pool size to use most of it (leave some for system)
+            meminfo = cp.cuda.runtime.memGetInfo()
+            total_mem = meminfo[1]  # Total memory in bytes
+            free_mem = meminfo[0]   # Free memory in bytes
+            # Use 90% of available memory for the pool
+            pool_size = int(total_mem * 0.9)
+            mempool.set_limit(size=pool_size)
+            print(f"GPU Memory configured: Total={total_mem/(1024**3):.2f}GB, "
+                  f"Free={free_mem/(1024**3):.2f}GB, Pool limit={pool_size/(1024**3):.2f}GB")
+        except Exception as e:
+            # If setting limit fails, continue without limit (uses all available)
+            print(f"Warning: Could not set memory pool limit: {e}")
+            pass
+        
         return True, cp
     except:
         return False, None

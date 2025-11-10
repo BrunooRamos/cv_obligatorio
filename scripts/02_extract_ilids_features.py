@@ -77,6 +77,12 @@ def parse_args() -> argparse.Namespace:
         help='Apply L1 normalization after averaging frames (default: False).',
     )
     parser.add_argument(
+        '--pooling-strategy',
+        choices=['first_frame', 'mean', 'max', 'median'],
+        default='first_frame',
+        help='Pooling strategy: first_frame (use only first frame, no pooling), mean (average), max, or median (default: first_frame).',
+    )
+    parser.add_argument(
         '--calibration-file',
         type=str,
         default='data/color_ranges_market.json',
@@ -113,9 +119,26 @@ def aggregate_sequence_features(
     normalize_method: str,
     use_gpu: bool = False,
     normalize_final: bool = True,
+    pooling_strategy: str = 'first_frame',  # 'first_frame', 'mean', 'max', 'median'
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Aggregate features from multiple frames.
+    
+    Args:
+        pooling_strategy: 'first_frame' (use only first frame), 'mean', 'max', 'median'
+    """
+    if pooling_strategy == 'first_frame':
+        # Use only the first frame (no pooling)
+        frames_to_use = [frames[0]] if frames else []
+    else:
+        # Use all frames for pooling
+        frames_to_use = frames
+    
+    if not frames_to_use:
+        raise ValueError("No frames provided")
+    
     color_batch, texture_batch = extract_bilp_batch(
-        frames,
+        frames_to_use,
         n_stripes=n_stripes,
         color_params=color_params,
         texture_params=texture_params,
@@ -125,18 +148,34 @@ def aggregate_sequence_features(
         use_gpu=use_gpu,
     )
 
-    color_mean = np.mean(color_batch, axis=0)
-    texture_mean = np.mean(texture_batch, axis=0)
-
-    # Optional final L1 normalization after averaging
-    if normalize_final:
-        color_mean = normalize_l1(color_mean).astype(np.float32)
-        texture_mean = normalize_l1(texture_mean).astype(np.float32)
+    if pooling_strategy == 'first_frame':
+        # Single frame, no pooling needed
+        color_features = color_batch[0]
+        texture_features = texture_batch[0]
+    elif pooling_strategy == 'mean':
+        # Average pooling (original behavior)
+        color_features = np.mean(color_batch, axis=0)
+        texture_features = np.mean(texture_batch, axis=0)
+    elif pooling_strategy == 'max':
+        # Max pooling
+        color_features = np.max(color_batch, axis=0)
+        texture_features = np.max(texture_batch, axis=0)
+    elif pooling_strategy == 'median':
+        # Median pooling
+        color_features = np.median(color_batch, axis=0)
+        texture_features = np.median(texture_batch, axis=0)
     else:
-        color_mean = color_mean.astype(np.float32)
-        texture_mean = texture_mean.astype(np.float32)
+        raise ValueError(f"Unknown pooling strategy: {pooling_strategy}")
 
-    return color_mean, texture_mean
+    # Optional final L1 normalization
+    if normalize_final:
+        color_features = normalize_l1(color_features).astype(np.float32)
+        texture_features = normalize_l1(texture_features).astype(np.float32)
+    else:
+        color_features = color_features.astype(np.float32)
+        texture_features = texture_features.astype(np.float32)
+
+    return color_features, texture_features
 
 
 def process_sequences(
@@ -147,6 +186,7 @@ def process_sequences(
     texture_params: Dict,
     normalize_method: str,
     normalize_final: bool,
+    pooling_strategy: str,
     verbose: bool,
     use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, Dict[str, List]]:
@@ -181,6 +221,7 @@ def process_sequences(
             normalize_method=normalize_method,
             use_gpu=use_gpu,
             normalize_final=normalize_final,
+            pooling_strategy=pooling_strategy,
         )
 
         color_features.append(color_vec)
@@ -257,6 +298,7 @@ def main() -> None:
         texture_params=texture_params,
         normalize_method=args.normalize_method,
         normalize_final=args.normalize_final,
+        pooling_strategy=args.pooling_strategy,
         verbose=args.verbose,
         use_gpu=args.use_gpu,
     )
@@ -269,6 +311,7 @@ def main() -> None:
         texture_params=texture_params,
         normalize_method=args.normalize_method,
         normalize_final=args.normalize_final,
+        pooling_strategy=args.pooling_strategy,
         verbose=args.verbose,
         use_gpu=args.use_gpu,
     )
@@ -279,6 +322,7 @@ def main() -> None:
         'normalize_final': args.normalize_final,
         'sampling_strategy': args.sampling_strategy,
         'num_sampled_frames': args.num_frames,
+        'pooling_strategy': args.pooling_strategy,
         'calibration_file': os.path.abspath(args.calibration_file),
     })
 
@@ -288,6 +332,7 @@ def main() -> None:
         'normalize_final': args.normalize_final,
         'sampling_strategy': args.sampling_strategy,
         'num_sampled_frames': args.num_frames,
+        'pooling_strategy': args.pooling_strategy,
         'calibration_file': os.path.abspath(args.calibration_file),
     })
 
