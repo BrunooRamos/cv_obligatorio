@@ -85,16 +85,19 @@ def cdist_gpu(
     query: np.ndarray,
     gallery: np.ndarray,
     metric: str = 'cityblock',
-    device = None
+    device = None,
+    batch_size: int = 200
 ) -> np.ndarray:
     """
     Compute distance matrix on GPU using CuPy.
+    Processes in batches to avoid memory issues with large matrices.
     
     Args:
         query: Query features (n_query, n_features)
         gallery: Gallery features (n_gallery, n_features)
         metric: Distance metric ('cityblock', 'euclidean', 'cosine')
         device: CuPy device or None
+        batch_size: Number of queries to process at once (to avoid OOM)
         
     Returns:
         Distance matrix (n_query, n_gallery) on CPU
@@ -106,30 +109,47 @@ def cdist_gpu(
     
     xp = get_array_module(device)
     
-    # Transfer to GPU
-    query_gpu = to_gpu(query, device)
+    # Transfer gallery to GPU once
     gallery_gpu = to_gpu(gallery, device)
+    n_query, n_features = query.shape
+    n_gallery = gallery.shape[0]
     
-    if metric == 'cityblock':
-        # L1 distance: sum(|x - y|)
-        # Expand dimensions for broadcasting: (n_query, 1, n_features) - (1, n_gallery, n_features)
-        diff = query_gpu[:, None, :] - gallery_gpu[None, :, :]
-        dist = xp.sum(xp.abs(diff), axis=2)
-    elif metric == 'euclidean':
-        # L2 distance: sqrt(sum((x - y)^2))
-        diff = query_gpu[:, None, :] - gallery_gpu[None, :, :]
-        dist = xp.sqrt(xp.sum(diff ** 2, axis=2))
-    elif metric == 'cosine':
-        # Cosine distance: 1 - cosine_similarity
-        query_norm = xp.linalg.norm(query_gpu, axis=1, keepdims=True)
-        gallery_norm = xp.linalg.norm(gallery_gpu, axis=1, keepdims=True)
-        dot_product = query_gpu @ gallery_gpu.T
-        dist = 1 - dot_product / (query_norm * gallery_norm.T)
-    else:
-        raise ValueError(f"Unsupported metric: {metric}")
+    # Pre-allocate result matrix
+    dist_matrix = np.zeros((n_query, n_gallery), dtype=np.float32)
     
-    # Transfer back to CPU
-    return to_cpu(dist)
+    # Process queries in batches to avoid memory issues
+    for i in range(0, n_query, batch_size):
+        end_idx = min(i + batch_size, n_query)
+        query_batch = query[i:end_idx]
+        query_batch_gpu = to_gpu(query_batch, device)
+        
+        if metric == 'cityblock':
+            # L1 distance: sum(|x - y|)
+            # Process batch: (batch_size, 1, n_features) - (1, n_gallery, n_features)
+            diff = query_batch_gpu[:, None, :] - gallery_gpu[None, :, :]
+            dist_batch = xp.sum(xp.abs(diff), axis=2)
+        elif metric == 'euclidean':
+            # L2 distance: sqrt(sum((x - y)^2))
+            diff = query_batch_gpu[:, None, :] - gallery_gpu[None, :, :]
+            dist_batch = xp.sqrt(xp.sum(diff ** 2, axis=2))
+        elif metric == 'cosine':
+            # Cosine distance: 1 - cosine_similarity
+            query_batch_norm = xp.linalg.norm(query_batch_gpu, axis=1, keepdims=True)
+            gallery_norm = xp.linalg.norm(gallery_gpu, axis=1, keepdims=True)
+            dot_product = query_batch_gpu @ gallery_gpu.T
+            dist_batch = 1 - dot_product / (query_batch_norm * gallery_norm.T)
+        else:
+            raise ValueError(f"Unsupported metric: {metric}")
+        
+        # Transfer batch result to CPU and store
+        dist_matrix[i:end_idx] = to_cpu(dist_batch)
+        
+        # Free GPU memory for this batch
+        del query_batch_gpu, dist_batch
+        if metric in ['cityblock', 'euclidean']:
+            del diff
+    
+    return dist_matrix
 
 
 def convolve_gpu(
