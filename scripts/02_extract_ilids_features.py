@@ -49,8 +49,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--num-frames',
         type=int,
-        default=10,
-        help='Number of frames to sample per sequence.',
+        default=20,
+        help='Number of frames to sample per sequence (default: 20, average is 73).',
     )
     parser.add_argument(
         '--sampling-strategy',
@@ -73,9 +73,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--normalize-final',
         action='store_true',
-        default=False,
-        help='Apply L1 normalization after averaging frames (default: False).',
+        help='Apply L1 normalization after averaging frames (default: True, recommended for better discrimination).',
     )
+    parser.add_argument(
+        '--no-normalize-final',
+        action='store_false',
+        dest='normalize_final',
+        help='Disable final L1 normalization after averaging frames.',
+    )
+    parser.set_defaults(normalize_final=True)
     parser.add_argument(
         '--calibration-file',
         type=str,
@@ -114,6 +120,11 @@ def aggregate_sequence_features(
     use_gpu: bool = False,
     normalize_final: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Aggregate features across frames in a sequence.
+    
+    Uses mean aggregation (robust to outliers compared to median for normalized features).
+    """
     color_batch, texture_batch = extract_bilp_batch(
         frames,
         n_stripes=n_stripes,
@@ -125,10 +136,13 @@ def aggregate_sequence_features(
         use_gpu=use_gpu,
     )
 
+    # Use mean aggregation across frames
+    # Mean is better than median for normalized features as it preserves the distribution
     color_mean = np.mean(color_batch, axis=0)
     texture_mean = np.mean(texture_batch, axis=0)
 
-    # Optional final L1 normalization after averaging
+    # Final L1 normalization after averaging (critical for discrimination)
+    # This ensures features are on the same scale and improves matching
     if normalize_final:
         color_mean = normalize_l1(color_mean).astype(np.float32)
         texture_mean = normalize_l1(texture_mean).astype(np.float32)
