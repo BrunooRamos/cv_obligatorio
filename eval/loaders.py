@@ -87,7 +87,21 @@ def load_market1501(
     split_dir = os.path.join(dataset_path, split_dirs[split])
 
     if not os.path.exists(split_dir):
-        raise FileNotFoundError(f"Directory not found: {split_dir}")
+        # Check if dataset_path exists
+        if not os.path.exists(dataset_path):
+            raise FileNotFoundError(
+                f"Dataset directory not found: {dataset_path}\n"
+                f"Please verify the dataset path is correct."
+            )
+        
+        # List available directories
+        available_dirs = [d for d in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, d))]
+        raise FileNotFoundError(
+            f"Split directory not found: {split_dir}\n"
+            f"Expected directory: {split_dirs[split]}\n"
+            f"Dataset path: {dataset_path}\n"
+            f"Available directories: {available_dirs}"
+        )
 
     # Get all jpg files
     image_files = sorted(glob.glob(os.path.join(split_dir, '*.jpg')))
