@@ -186,10 +186,10 @@ def convolve_gpu(
     # Pad kernel to match (padded) image size for FFT-based convolution
     # Do padding in NumPy to avoid CuPy JIT compilation issues
     kernel_cpu = to_cpu(kernel_gpu)
-    pad_h = (h_padded - k_h) // 2
-    pad_w = (w_padded - k_w) // 2
-    pad_h_after = h_padded - k_h - pad_h
-    pad_w_after = w_padded - k_w - pad_w
+    pad_h = max(0, (h_padded - k_h) // 2)
+    pad_w = max(0, (w_padded - k_w) // 2)
+    pad_h_after = max(0, h_padded - k_h - pad_h)
+    pad_w_after = max(0, w_padded - k_w - pad_w)
     
     kernel_padded_cpu = np.pad(
         kernel_cpu,
@@ -285,10 +285,10 @@ def batch_convolve_gpu(
             # Pad kernel to match (padded) image size
             # Do padding in NumPy to avoid CuPy JIT compilation issues
             kernel_cpu = to_cpu(kernel_gpu)
-            pad_h = (h_padded - k_h) // 2
-            pad_w = (w_padded - k_w) // 2
-            pad_h_after = h_padded - k_h - pad_h
-            pad_w_after = w_padded - k_w - pad_w
+            pad_h = max(0, (h_padded - k_h) // 2)
+            pad_w = max(0, (w_padded - k_w) // 2)
+            pad_h_after = max(0, h_padded - k_h - pad_h)
+            pad_w_after = max(0, w_padded - k_w - pad_w)
             
             kernel_padded_cpu = np.pad(
                 kernel_cpu,
