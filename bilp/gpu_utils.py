@@ -86,7 +86,7 @@ def cdist_gpu(
     gallery: np.ndarray,
     metric: str = 'cityblock',
     device = None,
-    batch_size: int = 200
+    batch_size: int = 50
 ) -> np.ndarray:
     """
     Compute distance matrix on GPU using CuPy.
@@ -109,45 +109,60 @@ def cdist_gpu(
     
     xp = get_array_module(device)
     
-    # Transfer gallery to GPU once
-    gallery_gpu = to_gpu(gallery, device)
     n_query, n_features = query.shape
     n_gallery = gallery.shape[0]
     
     # Pre-allocate result matrix
     dist_matrix = np.zeros((n_query, n_gallery), dtype=np.float32)
     
-    # Process queries in batches to avoid memory issues
-    for i in range(0, n_query, batch_size):
-        end_idx = min(i + batch_size, n_query)
-        query_batch = query[i:end_idx]
-        query_batch_gpu = to_gpu(query_batch, device)
+    # For cosine, we can keep gallery on GPU and process in batches
+    # For cityblock/euclidean, we need to process both query and gallery in batches
+    if metric == 'cosine':
+        # Cosine is more memory efficient - transfer gallery once
+        gallery_gpu = to_gpu(gallery, device)
+        gallery_norm = xp.linalg.norm(gallery_gpu, axis=1, keepdims=True)
         
-        if metric == 'cityblock':
-            # L1 distance: sum(|x - y|)
-            # Process batch: (batch_size, 1, n_features) - (1, n_gallery, n_features)
-            diff = query_batch_gpu[:, None, :] - gallery_gpu[None, :, :]
-            dist_batch = xp.sum(xp.abs(diff), axis=2)
-        elif metric == 'euclidean':
-            # L2 distance: sqrt(sum((x - y)^2))
-            diff = query_batch_gpu[:, None, :] - gallery_gpu[None, :, :]
-            dist_batch = xp.sqrt(xp.sum(diff ** 2, axis=2))
-        elif metric == 'cosine':
-            # Cosine distance: 1 - cosine_similarity
+        for i in range(0, n_query, batch_size):
+            end_idx = min(i + batch_size, n_query)
+            query_batch = query[i:end_idx]
+            query_batch_gpu = to_gpu(query_batch, device)
+            
             query_batch_norm = xp.linalg.norm(query_batch_gpu, axis=1, keepdims=True)
-            gallery_norm = xp.linalg.norm(gallery_gpu, axis=1, keepdims=True)
             dot_product = query_batch_gpu @ gallery_gpu.T
             dist_batch = 1 - dot_product / (query_batch_norm * gallery_norm.T)
-        else:
-            raise ValueError(f"Unsupported metric: {metric}")
+            
+            dist_matrix[i:end_idx] = to_cpu(dist_batch)
+            del query_batch_gpu, dist_batch
         
-        # Transfer batch result to CPU and store
-        dist_matrix[i:end_idx] = to_cpu(dist_batch)
+        del gallery_gpu, gallery_norm
+    else:
+        # For cityblock and euclidean, process gallery in batches too
+        # to avoid creating huge intermediate arrays
+        gallery_batch_size = min(5000, n_gallery)  # Process gallery in chunks
         
-        # Free GPU memory for this batch
-        del query_batch_gpu, dist_batch
-        if metric in ['cityblock', 'euclidean']:
-            del diff
+        for i in range(0, n_query, batch_size):
+            query_end = min(i + batch_size, n_query)
+            query_batch = query[i:query_end]
+            query_batch_gpu = to_gpu(query_batch, device)
+            
+            for j in range(0, n_gallery, gallery_batch_size):
+                gallery_end = min(j + gallery_batch_size, n_gallery)
+                gallery_batch = gallery[j:gallery_end]
+                gallery_batch_gpu = to_gpu(gallery_batch, device)
+                
+                if metric == 'cityblock':
+                    # L1 distance: sum(|x - y|)
+                    diff = query_batch_gpu[:, None, :] - gallery_batch_gpu[None, :, :]
+                    dist_batch = xp.sum(xp.abs(diff), axis=2)
+                elif metric == 'euclidean':
+                    # L2 distance: sqrt(sum((x - y)^2))
+                    diff = query_batch_gpu[:, None, :] - gallery_batch_gpu[None, :, :]
+                    dist_batch = xp.sqrt(xp.sum(diff ** 2, axis=2))
+                
+                dist_matrix[i:query_end, j:gallery_end] = to_cpu(dist_batch)
+                del gallery_batch_gpu, dist_batch, diff
+            
+            del query_batch_gpu
     
     return dist_matrix
 
