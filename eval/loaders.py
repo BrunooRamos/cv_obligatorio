@@ -247,10 +247,25 @@ def load_ilids_vid(
     Returns:
         List of dictionaries, one per sequence (person + camera combination)
     """
-    sequences_path = os.path.join(dataset_path, 'i-LIDS-VID', 'sequences')
-
-    if not os.path.exists(sequences_path):
-        raise FileNotFoundError(f"Sequences directory not found: {sequences_path}")
+    # Try different possible structures
+    possible_paths = [
+        os.path.join(dataset_path, 'i-LIDS-VID', 'sequences'),  # Standard structure
+        os.path.join(dataset_path, 'sequences'),  # Direct sequences folder
+        os.path.join(dataset_path, 'iLIDS-VID', 'sequences'),  # Alternative naming
+    ]
+    
+    sequences_path = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            sequences_path = path
+            break
+    
+    if sequences_path is None:
+        raise FileNotFoundError(
+            f"Sequences directory not found. Tried:\n" +
+            "\n".join([f"  - {p}" for p in possible_paths]) +
+            f"\n\nDataset path provided: {dataset_path}"
+        )
 
     data = []
 
