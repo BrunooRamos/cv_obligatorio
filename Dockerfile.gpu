@@ -32,6 +32,12 @@ COPY requirements.txt .
 # Instalar las librerías de Python
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+# Instalar PyTorch con soporte CUDA 12.1+ (compatible con CUDA 12.2/12.3)
+RUN pip3 install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Instalar torchreid después de PyTorch
+RUN pip3 install --no-cache-dir torchreid
+
 # Instalar CuPy para CUDA 12.x (compatible con la imagen base CUDA 12.3.0)
 RUN pip3 install --no-cache-dir cupy-cuda12x
 

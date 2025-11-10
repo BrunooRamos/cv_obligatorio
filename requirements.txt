@@ -7,3 +7,7 @@ matplotlib
 # GPU support (optional - install cupy-cuda11x or cupy-cuda12x based on your CUDA version)
 # cupy-cuda11x  # For CUDA 11.x
 # cupy-cuda12x  # For CUDA 12.x
+# Deep learning for comparison baseline
+torch>=2.0.0
+torchvision>=0.15.0
+torchreid>=1.4.0

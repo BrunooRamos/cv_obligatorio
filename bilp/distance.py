@@ -214,6 +214,37 @@ def compute_distance_matrix_fast(
     return dist_matrix
 
 
+def compute_distance_matrix_torchreid(
+    query_features: np.ndarray,
+    gallery_features: np.ndarray,
+    metric: str = 'cosine',
+    device: Optional = None
+) -> np.ndarray:
+    """
+    Compute distance matrix for torchreid features (single vector per sample).
+    
+    For torchreid features, we use cosine distance as standard for deep learning features.
+    This function treats torchreid features as a single unified feature vector.
+
+    Args:
+        query_features: Query features (n_query, feature_dim)
+        gallery_features: Gallery features (n_gallery, feature_dim)
+        metric: Distance metric ('cosine', 'euclidean', 'cityblock')
+        device: GPU device (CuPy) or None for CPU
+
+    Returns:
+        Distance matrix (n_query, n_gallery)
+    """
+    # For torchreid, cosine distance is standard (features are already L2 normalized)
+    # But we support other metrics too
+    if device is not None:
+        dist_matrix = cdist_gpu(query_features, gallery_features, metric=metric, device=device)
+    else:
+        dist_matrix = cdist(query_features, gallery_features, metric=metric)
+    
+    return dist_matrix
+
+
 def compute_pairwise_distances_per_stripe(
     query_features: np.ndarray,
     gallery_features: np.ndarray,
