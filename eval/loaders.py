@@ -263,9 +263,11 @@ def load_ilids_vid(
     """
     # Try different possible structures
     possible_paths = [
-        os.path.join(dataset_path, 'i-LIDS-VID', 'sequences'),  # Standard structure
-        os.path.join(dataset_path, 'sequences'),  # Direct sequences folder
-        os.path.join(dataset_path, 'iLIDS-VID', 'sequences'),  # Alternative naming
+        os.path.join(dataset_path, 'i-LIDS-VID', 'sequences'),  # Standard structure: iLIDS-VID/i-LIDS-VID/sequences
+        os.path.join(dataset_path, 'sequences'),  # Direct sequences folder: iLIDS-VID/sequences
+        os.path.join(dataset_path, 'iLIDS-VID', 'sequences'),  # Alternative naming: iLIDS-VID/iLIDS-VID/sequences
+        # Also try if dataset_path already points to i-LIDS-VID subdirectory
+        os.path.join(os.path.dirname(dataset_path), 'iLIDS-VID', 'i-LIDS-VID', 'sequences'),  # Parent/iLIDS-VID/i-LIDS-VID/sequences
     ]
     
     sequences_path = None
