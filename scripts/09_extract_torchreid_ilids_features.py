@@ -105,7 +105,7 @@ def build_model(model_name: str, weights_path: str = None, use_gpu: bool = False
     # Build model
     model = models.build_model(
         name=model_name,
-        num_classes=1,  # Dummy, we only need features
+        num_classes=100,  # Dummy, we only need features
         pretrained=True if weights_path is None else False,
     )
     
