@@ -8,6 +8,6 @@ matplotlib
 # cupy-cuda11x  # For CUDA 11.x
 # cupy-cuda12x  # For CUDA 12.x
 # Deep learning for comparison baseline
-torch>=2.0.0
-torchvision>=0.15.0
-torchreid>=1.4.0
+# Note: torch and torchvision are installed separately in Dockerfile.gpu with CUDA support
+# torchreid latest version is 0.2.5 (as of 2024)
+torchreid>=0.2.0
