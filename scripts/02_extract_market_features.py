@@ -147,10 +147,10 @@ def extract_market1501_split(
     output_path = os.path.join(output_dir, filename)
 
     if os.path.exists(output_path) and not overwrite:
-        print(f"[Skip] {split}: File already exists at {output_path}")
+        print(f"[Skip] {split}: File already exists at {output_path}", flush=True)
         return
 
-    print(f"\n--- Processing Market-1501 split: {split} ---")
+    print(f"\n--- Processing Market-1501 split: {split} ---", flush=True)
 
     data = load_market1501(
         dataset_path,
@@ -159,10 +159,10 @@ def extract_market1501_split(
     )
 
     if len(data) == 0:
-        print(f"WARNING: No images found for split '{split}'. Nothing to do.")
+        print(f"WARNING: No images found for split '{split}'. Nothing to do.", flush=True)
         return
 
-    print(f"Found {len(data)} images in split '{split}'.")
+    print(f"Found {len(data)} images in split '{split}'.", flush=True)
 
     resize_size = (resize[0], resize[1])
 
@@ -184,10 +184,11 @@ def extract_market1501_split(
 
     start_time = time.time()
     last_log_time = start_time
+    last_log_count = 0
 
     if verbose:
-        print(f"Starting processing of {len(data)} images...")
-        print(f"Logging progress every {log_interval} images")
+        print(f"Starting processing of {len(data)} images...", flush=True)
+        print(f"Logging progress every {log_interval} images", flush=True)
 
     for start in range(0, len(data), batch_size):
         end = min(start + batch_size, len(data))
@@ -220,17 +221,20 @@ def extract_market1501_split(
             current_time = time.time()
             elapsed = current_time - start_time
             batch_elapsed = current_time - last_log_time
-            rate = log_interval / batch_elapsed if batch_elapsed > 0 else 0
+            # Calcular rate basado en imágenes procesadas desde el último log
+            images_since_last_log = num_processed - last_log_count
+            rate = images_since_last_log / batch_elapsed if batch_elapsed > 0.1 else num_processed / elapsed
             percentage = (num_processed / len(data)) * 100
             remaining = len(data) - num_processed
             eta = remaining / rate if rate > 0 else 0
             
             print(f"[{split}] Processed {num_processed}/{len(data)} images ({percentage:.1f}%) | "
-                  f"Rate: {rate:.1f} img/s | Elapsed: {elapsed:.1f}s | ETA: {eta:.1f}s")
+                  f"Rate: {rate:.2f} img/s | Elapsed: {elapsed:.1f}s | ETA: {eta:.1f}s", flush=True)
             last_log_time = current_time
+            last_log_count = num_processed
         elif not verbose:
             # Si no está verbose, mostrar progreso simple en la misma línea
-            print(f"Processed {num_processed}/{len(data)} images", end='\r')
+            print(f"Processed {num_processed}/{len(data)} images", end='\r', flush=True)
 
     if not verbose:
         print()  # newline after progress
@@ -238,10 +242,10 @@ def extract_market1501_split(
         # Log final cuando termine
         total_time = time.time() - start_time
         print(f"[{split}] Completed! Processed {len(processed_entries)}/{len(data)} images in {total_time:.1f}s "
-              f"({len(processed_entries)/total_time:.1f} img/s average)")
+              f"({len(processed_entries)/total_time:.1f} img/s average)", flush=True)
 
     if not processed_entries:
-        print(f"ERROR: No valid images were processed for split '{split}'.")
+        print(f"ERROR: No valid images were processed for split '{split}'.", flush=True)
         return
 
     color_features = np.vstack(color_features_batches)
@@ -282,9 +286,10 @@ def extract_market1501_split(
     ensure_output_dir(output_dir)
     save_features(output_path, color_features, texture_features, metadata)
 
-    print(f"Saved features to {output_path}")
+    print(f"Saved features to {output_path}", flush=True)
     print(
-        f"Color shape: {color_features.shape}, Texture shape: {texture_features.shape}"
+        f"Color shape: {color_features.shape}, Texture shape: {texture_features.shape}",
+        flush=True
     )
 
 
