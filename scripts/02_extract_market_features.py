@@ -55,8 +55,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--normalize-method',
         choices=['l1', 'l2', 'power', 'l1_power'],
-        default='l1',
-        help='Normalization method applied per stripe.',
+        default='l2',
+        help='Normalization method (default: l2 for global normalization).',
+    )
+    parser.add_argument(
+        '--n-bins-uv',
+        type=int,
+        default=8,
+        help='Number of bins for UV histogram (default: 8, was 16).',
+    )
+    parser.add_argument(
+        '--n-bins-lum',
+        type=int,
+        default=8,
+        help='Number of bins for luminance histogram (default: 8, was 16).',
     )
     parser.add_argument(
         '--resize-width',
@@ -127,6 +139,8 @@ def extract_market1501_split(
     calibration_file: str,
     overwrite: bool,
     use_gpu: bool = False,
+    n_bins_uv: int = 8,
+    n_bins_lum: int = 8,
 ) -> None:
     filename = f'market1501_{split}.npz'
     output_path = os.path.join(output_dir, filename)
@@ -153,8 +167,8 @@ def extract_market1501_split(
 
     u_range, v_range = load_calibrated_color_ranges(calibration_file)
     color_params = {
-        'n_bins_uv': 16,
-        'n_bins_lum': 16,
+        'n_bins_uv': n_bins_uv,
+        'n_bins_lum': n_bins_lum,
         'u_range': u_range,
         'v_range': v_range,
     }
@@ -183,6 +197,7 @@ def extract_market1501_split(
             texture_params=texture_params,
             normalize=True,
             normalize_method=normalize_method,
+            normalize_per_stripe=False,  # Global normalization (not per-stripe)
             verbose=False,
             use_gpu=use_gpu,
         )
@@ -262,6 +277,8 @@ def main() -> None:
             calibration_file=args.calibration_file,
             overwrite=args.overwrite,
             use_gpu=args.use_gpu,
+            n_bins_uv=args.n_bins_uv,
+            n_bins_lum=args.n_bins_lum,
         )
 
 
