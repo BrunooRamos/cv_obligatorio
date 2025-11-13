@@ -114,24 +114,31 @@ def aggregate_sequence_features(
     use_gpu: bool = False,
     normalize_final: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray]:
+    # SIMPLIFIED NORMALIZATION: Do NOT normalize per stripe
+    # Only normalize once at the end after averaging frames
     color_batch, texture_batch = extract_bilp_batch(
         frames,
         n_stripes=n_stripes,
         color_params=color_params,
         texture_params=texture_params,
-        normalize=True,
+        normalize=False,  # CHANGED: No per-stripe normalization
         normalize_method=normalize_method,
         verbose=False,
         use_gpu=use_gpu,
     )
 
+    # Average across frames
     color_mean = np.mean(color_batch, axis=0)
     texture_mean = np.mean(texture_batch, axis=0)
 
-    # Optional final L1 normalization after averaging
+    # Single L2 normalization at the end (more gentle than L1)
     if normalize_final:
-        color_mean = normalize_l1(color_mean).astype(np.float32)
-        texture_mean = normalize_l1(texture_mean).astype(np.float32)
+        # L2 normalization instead of L1 (preserves more variance)
+        color_norm = np.linalg.norm(color_mean) + 1e-12
+        color_mean = (color_mean / color_norm).astype(np.float32)
+
+        texture_norm = np.linalg.norm(texture_mean) + 1e-12
+        texture_mean = (texture_mean / texture_norm).astype(np.float32)
     else:
         color_mean = color_mean.astype(np.float32)
         texture_mean = texture_mean.astype(np.float32)
