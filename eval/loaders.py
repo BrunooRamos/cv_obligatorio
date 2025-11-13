@@ -202,7 +202,7 @@ def sample_frames_from_sequence(
     Args:
         frame_paths: List of paths to all frames in sequence (sorted)
         num_frames: Number of frames to sample
-        strategy: Sampling strategy ('uniform', 'random', or 'all')
+        strategy: Sampling strategy ('uniform', 'random', 'consecutive', or 'all')
 
     Returns:
         List of sampled frame paths
@@ -215,6 +215,11 @@ def sample_frames_from_sequence(
         indices = np.linspace(0, len(frame_paths) - 1, num_frames, dtype=int)
         return [frame_paths[i] for i in indices]
 
+    elif strategy == 'consecutive':
+        # Sample consecutive frames from the beginning
+        num_frames = min(num_frames, len(frame_paths))
+        return frame_paths[:num_frames]
+
     elif strategy == 'random':
         # Random sampling
         indices = np.random.choice(len(frame_paths), num_frames, replace=False)
@@ -222,7 +227,7 @@ def sample_frames_from_sequence(
         return [frame_paths[i] for i in indices]
 
     else:
-        raise ValueError(f"Invalid strategy '{strategy}'. Choose from: uniform, random, all")
+        raise ValueError(f"Invalid strategy '{strategy}'. Choose from: uniform, random, consecutive, all")
 
 
 def load_ilids_vid(
@@ -239,7 +244,7 @@ def load_ilids_vid(
     Args:
         dataset_path: Path to iLIDS-VID directory
         num_frames: Number of frames to sample per sequence
-        sampling_strategy: 'uniform', 'random', or 'all'
+        sampling_strategy: 'uniform', 'random', 'consecutive', or 'all'
         resize: Target size (width, height) or None to keep original
         return_images: If True, load actual images; otherwise just metadata
         verbose: If True, print progress information
