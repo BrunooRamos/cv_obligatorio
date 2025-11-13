@@ -3,9 +3,12 @@
 import argparse
 import os
 import sys
+import time
 from typing import Dict, List, Tuple
 
-sys.path.append('/app')
+# Add project root to path (works both in Docker and locally)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 import numpy as np
 
@@ -54,8 +57,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         '--sampling-strategy',
-        choices=['uniform', 'random', 'all'],
-        default='uniform',
+        choices=['uniform', 'random', 'consecutive', 'all'],
+        default='consecutive',
         help='Frame sampling strategy within each sequence.',
     )
     parser.add_argument(
@@ -79,8 +82,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--pooling-strategy',
         choices=['first_frame', 'mean', 'max', 'median'],
-        default='first_frame',
-        help='Pooling strategy: first_frame (use only first frame, no pooling), mean (average), max, or median (default: first_frame).',
+        default='mean',
+        help='Pooling strategy: first_frame (use only first frame, no pooling), mean (average), max, or median (default: mean).',
     )
     parser.add_argument(
         '--calibration-file',
@@ -102,6 +105,24 @@ def parse_args() -> argparse.Namespace:
         '--use-gpu',
         action='store_true',
         help='Use GPU for feature extraction if available (requires CuPy).',
+    )
+    parser.add_argument(
+        '--n-bins-uv',
+        type=int,
+        default=8,
+        help='Number of bins for UV histogram (default: 8, was 16).',
+    )
+    parser.add_argument(
+        '--n-bins-lum',
+        type=int,
+        default=8,
+        help='Number of bins for luminance histogram (default: 8, was 16).',
+    )
+    parser.add_argument(
+        '--max-sequences',
+        type=int,
+        default=None,
+        help='Maximum number of sequences to process per camera (for testing). If None, processes all sequences.',
     )
     return parser.parse_args()
 
@@ -143,7 +164,8 @@ def aggregate_sequence_features(
         color_params=color_params,
         texture_params=texture_params,
         normalize=True,
-        normalize_method=normalize_method,
+        normalize_method='l2',  # Use L2 normalization (less aggressive)
+        normalize_per_stripe=False,  # Normalize globally instead of per stripe
         verbose=False,
         use_gpu=use_gpu,
     )
@@ -206,7 +228,12 @@ def process_sequences(
     if verbose:
         print(f"Processing {len(sequences)} sequences for camera {camera_id}...")
 
+    start_time = time.time()
+    last_print_time = start_time
+
     for idx, sequence in enumerate(sequences):
+        frame_start_time = time.time()
+        
         frames = sequence.get('frames', [])
         if not frames:
             if verbose:
@@ -237,8 +264,47 @@ def process_sequences(
         metadata['filenames'].append(os.path.basename(first_frame))
         metadata['paths'].append(first_frame)
 
-        if verbose and (idx + 1) % 10 == 0:
-            print(f"Processed {idx + 1}/{len(sequences)} sequences for camera {camera_id}")
+        # Calculate and display ETA
+        if verbose:
+            current_time = time.time()
+            elapsed_time = current_time - start_time
+            sequences_processed = idx + 1
+            
+            # Calculate ETA only if we've processed at least 1 sequence
+            if sequences_processed > 0:
+                avg_time_per_sequence = elapsed_time / sequences_processed
+                remaining_sequences = len(sequences) - sequences_processed
+                eta_seconds = avg_time_per_sequence * remaining_sequences
+                
+                # Format ETA
+                if eta_seconds < 60:
+                    eta_str = f"{eta_seconds:.0f}s"
+                elif eta_seconds < 3600:
+                    eta_minutes = eta_seconds / 60
+                    eta_str = f"{eta_minutes:.1f}min"
+                else:
+                    eta_hours = eta_seconds / 3600
+                    eta_minutes = (eta_seconds % 3600) / 60
+                    eta_str = f"{eta_hours:.0f}h {eta_minutes:.0f}min"
+                
+                # Print progress every 10 sequences or every 30 seconds
+                time_since_last_print = current_time - last_print_time
+                if (idx + 1) % 10 == 0 or time_since_last_print >= 30:
+                    print(f"Processed {sequences_processed}/{len(sequences)} sequences for camera {camera_id} | ETA: {eta_str}")
+                    last_print_time = current_time
+
+    # Print final summary
+    if verbose:
+        total_time = time.time() - start_time
+        if total_time < 60:
+            time_str = f"{total_time:.1f}s"
+        elif total_time < 3600:
+            time_str = f"{total_time/60:.1f}min"
+        else:
+            hours = int(total_time // 3600)
+            minutes = int((total_time % 3600) // 60)
+            time_str = f"{hours}h {minutes}min"
+        print(f"Completed processing {len(color_features)} sequences for camera {camera_id} in {time_str}")
 
     if not color_features:
         raise RuntimeError(f"No valid sequences processed for camera {camera_id}.")
@@ -271,6 +337,13 @@ def main() -> None:
     cam1_sequences = [seq for seq in sequences if seq['camera_id'] == 1]
     cam2_sequences = [seq for seq in sequences if seq['camera_id'] == 2]
 
+    # Limit to subset if requested
+    if args.max_sequences is not None:
+        cam1_sequences = cam1_sequences[:args.max_sequences]
+        cam2_sequences = cam2_sequences[:args.max_sequences]
+        if args.verbose:
+            print(f"Limiting to {args.max_sequences} sequences per camera (subset mode)")
+
     if args.verbose:
         print(f"Camera 1 sequences: {len(cam1_sequences)} (query)")
         print(f"Camera 2 sequences: {len(cam2_sequences)} (gallery)")
@@ -280,8 +353,8 @@ def main() -> None:
 
     u_range, v_range = load_calibrated_color_ranges(args.calibration_file)
     color_params = {
-        'n_bins_uv': 16,
-        'n_bins_lum': 16,
+        'n_bins_uv': args.n_bins_uv,
+        'n_bins_lum': args.n_bins_lum,
         'u_range': u_range,
         'v_range': v_range,
     }
@@ -318,6 +391,8 @@ def main() -> None:
 
     meta_query.update({
         'n_stripes': args.n_stripes,
+        'n_bins_uv': args.n_bins_uv,
+        'n_bins_lum': args.n_bins_lum,
         'normalize_method': args.normalize_method,
         'normalize_final': args.normalize_final,
         'sampling_strategy': args.sampling_strategy,
@@ -328,6 +403,8 @@ def main() -> None:
 
     meta_gallery.update({
         'n_stripes': args.n_stripes,
+        'n_bins_uv': args.n_bins_uv,
+        'n_bins_lum': args.n_bins_lum,
         'normalize_method': args.normalize_method,
         'normalize_final': args.normalize_final,
         'sampling_strategy': args.sampling_strategy,
@@ -336,8 +413,22 @@ def main() -> None:
         'calibration_file': os.path.abspath(args.calibration_file),
     })
 
-    query_path = os.path.join(args.output_dir, args.query_filename)
-    gallery_path = os.path.join(args.output_dir, args.gallery_filename)
+    # Adjust filenames if using subset
+    if args.max_sequences is not None:
+        # Add subset suffix to filenames
+        base_query_name = os.path.splitext(args.query_filename)[0]
+        base_gallery_name = os.path.splitext(args.gallery_filename)[0]
+        ext = os.path.splitext(args.query_filename)[1]
+        query_filename = f"{base_query_name}_subset{args.max_sequences}{ext}"
+        gallery_filename = f"{base_gallery_name}_subset{args.max_sequences}{ext}"
+        if args.verbose:
+            print(f"Using subset filenames: {query_filename}, {gallery_filename}")
+    else:
+        query_filename = args.query_filename
+        gallery_filename = args.gallery_filename
+
+    query_path = os.path.join(args.output_dir, query_filename)
+    gallery_path = os.path.join(args.output_dir, gallery_filename)
 
     if not args.overwrite:
         if os.path.exists(query_path):
@@ -353,6 +444,12 @@ def main() -> None:
 
     print(f"Saved query features to {query_path} (shape: {color_query.shape}, {texture_query.shape})")
     print(f"Saved gallery features to {gallery_path} (shape: {color_gallery.shape}, {texture_gallery.shape})")
+    
+    if args.max_sequences is not None:
+        print(f"\n⚠️  NOTE: These are subset features ({args.max_sequences} sequences per camera).")
+        print(f"   To evaluate, use:")
+        print(f"   --query-features {query_path}")
+        print(f"   --gallery-features {gallery_path}")
 
 
 if __name__ == '__main__':
