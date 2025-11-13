@@ -1,0 +1,15 @@
+{
+  "u_range": [
+    -0.31237247586250305,
+    0.6451367139816284
+  ],
+  "v_range": [
+    -0.6931444406509399,
+    0.5020898580551147
+  ],
+  "dataset": "iLIDS-VID",
+  "num_sequences": 200,
+  "num_frames_per_sequence": 5,
+  "percentile_low": 1.0,
+  "percentile_high": 99.0
+}
