@@ -8,6 +8,7 @@ import os
 from typing import Tuple, Optional, Dict
 from .color import extract_color_features
 from .texture import extract_texture_features, build_gabor_bank
+from .hog import extract_hog_features
 from .gpu_utils import get_device
 
 
