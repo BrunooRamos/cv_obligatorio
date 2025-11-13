@@ -131,6 +131,7 @@ def extract_bilp_descriptor(
     texture_params: Optional[Dict] = None,
     normalize: bool = True,
     normalize_method: str = 'l1',
+    normalize_per_stripe: bool = True,
     device: Optional = None
 ) -> Dict[str, np.ndarray]:
     """
@@ -141,8 +142,9 @@ def extract_bilp_descriptor(
         n_stripes: Number of horizontal stripes
         color_params: Parameters for color feature extraction
         texture_params: Parameters for texture feature extraction
-        normalize: Whether to normalize features per stripe
+        normalize: Whether to normalize features
         normalize_method: Normalization method ('l1', 'l2', 'power', 'l1_power')
+        normalize_per_stripe: If True, normalize each stripe independently; if False, normalize globally
         device: GPU device (CuPy) or None for CPU
 
     Returns:
@@ -184,26 +186,30 @@ def extract_bilp_descriptor(
         **texture_params
     )
 
-    # Normalize per stripe if requested
+    # Normalize if requested
     if normalize:
-        # Color: 16*16 + 16 = 272 per stripe
-        color_per_stripe = color_params['n_bins_uv']**2 + color_params['n_bins_lum']
-        color_features = normalize_per_stripe(
-            color_features,
-            n_stripes,
-            color_per_stripe,
-            normalize_method
-        )
+        if normalize_per_stripe:
+            # Normalize per stripe (original behavior)
+            color_per_stripe = color_params['n_bins_uv']**2 + color_params['n_bins_lum']
+            color_features = normalize_per_stripe(
+                color_features,
+                n_stripes,
+                color_per_stripe,
+                normalize_method
+            )
 
-        # Texture: n_scales * n_orientations + 2 per stripe
-        texture_per_stripe = (texture_params['n_scales'] *
-                             texture_params['n_orientations'] + 2)
-        texture_features = normalize_per_stripe(
-            texture_features,
-            n_stripes,
-            texture_per_stripe,
-            normalize_method
-        )
+            texture_per_stripe = (texture_params['n_scales'] *
+                                 texture_params['n_orientations'] + 2)
+            texture_features = normalize_per_stripe(
+                texture_features,
+                n_stripes,
+                texture_per_stripe,
+                normalize_method
+            )
+        else:
+            # Normalize globally (across all features)
+            color_features = normalize_features(color_features, normalize_method)
+            texture_features = normalize_features(texture_features, normalize_method)
 
     return {
         'color': color_features,
@@ -219,6 +225,7 @@ def extract_bilp_batch(
     texture_params: Optional[Dict] = None,
     normalize: bool = True,
     normalize_method: str = 'l1',
+    normalize_per_stripe: bool = True,
     verbose: bool = False,
     use_gpu: bool = False
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -230,8 +237,9 @@ def extract_bilp_batch(
         n_stripes: Number of horizontal stripes
         color_params: Parameters for color feature extraction
         texture_params: Parameters for texture feature extraction
-        normalize: Whether to normalize features per stripe
-        normalize_method: Normalization method
+        normalize: Whether to normalize features
+        normalize_method: Normalization method ('l1', 'l2', 'power', 'l1_power')
+        normalize_per_stripe: If True, normalize each stripe independently; if False, normalize globally
         verbose: Print progress
         use_gpu: Whether to use GPU if available
 
@@ -260,6 +268,7 @@ def extract_bilp_batch(
             texture_params=texture_params,
             normalize=normalize,
             normalize_method=normalize_method,
+            normalize_per_stripe=normalize_per_stripe,
             device=device
         )
 
