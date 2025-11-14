@@ -12,34 +12,6 @@ def sigmoid(x: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-x))
 
 
-def compute_chromatic_entropy(
-    u: np.ndarray,
-    v: np.ndarray,
-    n_bins: int = 16
-) -> float:
-    """
-    Compute entropy of chromatic histogram (u, v).
-
-    Args:
-        u, v: Log-chromaticity channels
-        n_bins: Number of bins for histogram
-
-    Returns:
-        Entropy value
-    """
-    # Compute 2D histogram
-    hist, _, _ = np.histogram2d(
-        u.ravel(),
-        v.ravel(),
-        bins=[n_bins, n_bins]
-    )
-
-    # Normalize to probability distribution
-    hist = hist.ravel()
-    hist = hist / (hist.sum() + 1e-10)
-
-    # Compute entropy
-    return float(entropy(hist + 1e-10))
 
 
 def compute_texture_complexity(
@@ -434,53 +406,3 @@ def optimize_gating_params(
         print(f"Best {metric}: {best_score:.4f}")
 
     return best_params
-
-
-def compute_per_stripe_gating(
-    color_features: np.ndarray,
-    texture_features: np.ndarray,
-    params: Dict[str, float],
-    n_stripes: int = 6,
-    color_per_stripe: int = 272,
-    texture_per_stripe: int = 42
-) -> np.ndarray:
-    """
-    Compute per-stripe gating weights.
-
-    Args:
-        color_features: Color features
-        texture_features: Texture features
-        params: Gating parameters
-        n_stripes: Number of stripes
-        color_per_stripe: Features per stripe for color
-        texture_per_stripe: Features per stripe for texture
-
-    Returns:
-        Alpha weights per stripe (n_stripes,)
-    """
-    a1 = params.get('a1', 2.0)
-    a2 = params.get('a2', 1.0)
-    b = params.get('b', 0.0)
-
-    alphas = np.zeros(n_stripes)
-
-    for i in range(n_stripes):
-        # Texture complexity for this stripe
-        start_idx_t = i * texture_per_stripe
-        end_idx_t = start_idx_t + texture_per_stripe - 2
-        gabor_stripe = texture_features[start_idx_t:end_idx_t]
-        T = compute_texture_complexity(gabor_stripe)
-
-        # Chromatic entropy for this stripe
-        start_idx_c = i * color_per_stripe
-        end_idx_c = start_idx_c + color_per_stripe
-        hist_stripe = color_features[start_idx_c:end_idx_c]
-        hist_stripe = hist_stripe / (hist_stripe.sum() + 1e-10)
-        C = entropy(hist_stripe + 1e-10)
-
-        # Compute alpha for this stripe
-        logit = a1 * T - a2 * C + b
-        alpha = sigmoid(logit)
-        alphas[i] = np.clip(alpha, 0.05, 0.95)
-
-    return alphas

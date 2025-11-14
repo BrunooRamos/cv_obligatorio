@@ -271,27 +271,6 @@ def extract_bilp_batch(
 
     return color_features, texture_features
 
-
-def compute_feature_stats(features: np.ndarray) -> Dict[str, float]:
-    """
-    Compute statistics of feature vectors.
-
-    Args:
-        features: Feature matrix (n_samples, n_features)
-
-    Returns:
-        Dictionary with statistics
-    """
-    return {
-        'mean': float(np.mean(features)),
-        'std': float(np.std(features)),
-        'min': float(np.min(features)),
-        'max': float(np.max(features)),
-        'median': float(np.median(features)),
-        'sparsity': float(np.sum(features == 0) / features.size)
-    }
-
-
 def save_features(
     filepath: str,
     color_features: np.ndarray,

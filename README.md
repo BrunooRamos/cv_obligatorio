@@ -214,7 +214,6 @@ Utilidades completas:
 - **`extract_bilp_descriptor(image)`**: Extracción end-to-end para una imagen
 - **`extract_bilp_batch(images)`**: Procesamiento batch optimizado
 - **`save_features() / load_features()`**: Guardado/carga de features en .npz
-- **`compute_feature_stats()`**: Estadísticas de features
 
 ---
 
