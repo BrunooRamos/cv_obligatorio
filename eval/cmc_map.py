@@ -3,7 +3,7 @@ CMC and mAP metrics for Person Re-Identification evaluation
 """
 
 import numpy as np
-from typing import List, Tuple, Dict, Optional
+from typing import List, Dict, Optional
 
 
 def compute_cmc(
