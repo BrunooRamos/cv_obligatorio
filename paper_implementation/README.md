@@ -105,7 +105,6 @@ paper_implementation/
 ├── eval_ilidsvid.py          # Evaluación CMC para video
 ├── eval_ilidsvid_complete.py # ⭐ Script completo para iLIDS-VID (EJECUTA ESTE)
 ├── run_pipeline.py           # Script guía paso a paso
-├── example_usage.py          # Ejemplos de uso
 └── requirements.txt          # Dependencias
 ```
 
