@@ -5,7 +5,7 @@ Texture features: Gabor filters, periodicity, and spectral analysis
 import numpy as np
 from scipy import ndimage
 from typing import Tuple, List, Optional
-from .gpu_utils import get_device, convolve_gpu
+from .gpu_utils import convolve_gpu
 
 
 def create_gabor_filter(
