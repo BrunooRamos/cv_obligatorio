@@ -214,6 +214,70 @@ def compute_distance_matrix_fast(
     return dist_matrix
 
 
+def compute_distance_matrix_fast_with_hog(
+    query_color: np.ndarray,
+    query_texture: np.ndarray,
+    query_hog: np.ndarray,
+    gallery_color: np.ndarray,
+    gallery_texture: np.ndarray,
+    gallery_hog: np.ndarray,
+    alpha: float = 0.5,
+    alpha_hog: float = 0.33,
+    metric: str = 'cityblock',
+    device: Optional = None
+) -> np.ndarray:
+    """
+    Fast computation of distance matrix using color, texture, and HOG features.
+
+    Args:
+        query_color: Query color features (n_query, color_dim)
+        query_texture: Query texture features (n_query, texture_dim)
+        query_hog: Query HOG features (n_query, hog_dim)
+        gallery_color: Gallery color features (n_gallery, color_dim)
+        gallery_texture: Gallery texture features (n_gallery, texture_dim)
+        gallery_hog: Gallery HOG features (n_gallery, hog_dim)
+        alpha: Gating weight for texture vs color (default: 0.5)
+        alpha_hog: Weight for HOG features in 3-way fusion (default: 0.33)
+        metric: Distance metric ('cityblock', 'euclidean', 'cosine')
+        device: GPU device (CuPy) or None for CPU
+
+    Returns:
+        Distance matrix (n_query, n_gallery)
+
+    Note:
+        Final distance = alpha_hog * D_hog + (1 - alpha_hog) * [alpha * D_texture + (1 - alpha) * D_color]
+    """
+    # Compute separate distance matrices (use GPU if available)
+    if device is not None:
+        dist_color = cdist_gpu(query_color, gallery_color, metric=metric, device=device)
+        dist_texture = cdist_gpu(query_texture, gallery_texture, metric=metric, device=device)
+        dist_hog = cdist_gpu(query_hog, gallery_hog, metric=metric, device=device)
+    else:
+        dist_color = cdist(query_color, gallery_color, metric=metric)
+        dist_texture = cdist(query_texture, gallery_texture, metric=metric)
+        dist_hog = cdist(query_hog, gallery_hog, metric=metric)
+
+    # Combine color and texture with gating
+    if isinstance(alpha, (int, float)):
+        # Scalar alpha: same weight for all queries
+        dist_color_texture = alpha * dist_texture + (1 - alpha) * dist_color
+    else:
+        # Adaptive alpha: different weight per query
+        alpha = np.asarray(alpha)
+        if alpha.ndim == 0:
+            alpha = alpha.item()
+            dist_color_texture = alpha * dist_texture + (1 - alpha) * dist_color
+        else:
+            # Reshape alpha to (n_query, 1) for broadcasting
+            alpha = alpha.reshape(-1, 1)
+            dist_color_texture = alpha * dist_texture + (1 - alpha) * dist_color
+
+    # Combine with HOG
+    dist_matrix = alpha_hog * dist_hog + (1 - alpha_hog) * dist_color_texture
+
+    return dist_matrix
+
+
 def compute_pairwise_distances_per_stripe(
     query_features: np.ndarray,
     gallery_features: np.ndarray,

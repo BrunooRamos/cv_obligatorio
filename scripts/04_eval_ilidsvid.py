@@ -10,7 +10,7 @@ sys.path.append('/app')
 import numpy as np
 
 from bilp.utils import load_features
-from bilp.distance import compute_distance_matrix_fast
+from bilp.distance import compute_distance_matrix_fast, compute_distance_matrix_fast_with_hog
 from bilp.gpu_utils import get_device
 from eval.cmc_map import evaluate_ilids_vid, print_results, save_results
 
@@ -36,6 +36,12 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         help='Gating weight between texture (alpha) and color (1-alpha). If None, uses adaptive gating with default params.',
+    )
+    parser.add_argument(
+        '--alpha-hog',
+        type=float,
+        default=0.33,
+        help='Weight for HOG features when using 3-way fusion (color + texture + HOG). Default: 0.33.',
     )
     parser.add_argument(
         '--gating-params',
@@ -112,24 +118,35 @@ def main() -> None:
 
     if args.verbose:
         print(f"Loading query features from {args.query_features}")
-    query_color, query_texture, query_metadata = load_features(args.query_features)
+    query_color, query_texture, query_hog, query_metadata = load_features(args.query_features)
     if query_metadata is None:
         raise ValueError('Query features file does not contain metadata. Re-run extraction script with metadata enabled.')
 
     if args.verbose:
         print(f"Loading gallery features from {args.gallery_features}")
-    gallery_color, gallery_texture, gallery_metadata = load_features(args.gallery_features)
+    gallery_color, gallery_texture, gallery_hog, gallery_metadata = load_features(args.gallery_features)
     if gallery_metadata is None:
         raise ValueError('Gallery features file does not contain metadata. Re-run extraction script with metadata enabled.')
+
+    # Check if HOG features are available
+    use_hog = (query_hog is not None and gallery_hog is not None and
+               len(query_hog) > 0 and len(gallery_hog) > 0)
 
     if args.verbose:
         print(f"Query color shape: {query_color.shape}, texture shape: {query_texture.shape}")
         print(f"Gallery color shape: {gallery_color.shape}, texture shape: {gallery_texture.shape}")
+        if use_hog:
+            print(f"Query HOG shape: {query_hog.shape}")
+            print(f"Gallery HOG shape: {gallery_hog.shape}")
+        else:
+            print("HOG features not available, using color + texture only")
 
     if query_color.shape[1] != gallery_color.shape[1]:
         raise ValueError('Color feature dimensions between query and gallery do not match.')
     if query_texture.shape[1] != gallery_texture.shape[1]:
         raise ValueError('Texture feature dimensions between query and gallery do not match.')
+    if use_hog and query_hog.shape[1] != gallery_hog.shape[1]:
+        raise ValueError('HOG feature dimensions between query and gallery do not match.')
 
     if query_color.shape[0] == 0 or gallery_color.shape[0] == 0:
         raise ValueError('Empty query or gallery feature matrices. Check the feature files.')
@@ -194,15 +211,34 @@ def main() -> None:
         if args.verbose:
             print(f"Using fixed alpha: {alpha}")
 
-    distance_matrix = compute_distance_matrix_fast(
-        query_color,
-        query_texture,
-        gallery_color,
-        gallery_texture,
-        alpha=alpha,
-        metric=args.metric,
-        device=device,
-    )
+    # Compute distance matrix with or without HOG
+    if use_hog:
+        if args.verbose:
+            print(f"Using 3-way fusion: Color + Texture + HOG (alpha_hog={args.alpha_hog})")
+        distance_matrix = compute_distance_matrix_fast_with_hog(
+            query_color,
+            query_texture,
+            query_hog,
+            gallery_color,
+            gallery_texture,
+            gallery_hog,
+            alpha=alpha,
+            alpha_hog=args.alpha_hog,
+            metric=args.metric,
+            device=device,
+        )
+    else:
+        if args.verbose:
+            print(f"Using 2-way fusion: Color + Texture only")
+        distance_matrix = compute_distance_matrix_fast(
+            query_color,
+            query_texture,
+            gallery_color,
+            gallery_texture,
+            alpha=alpha,
+            metric=args.metric,
+            device=device,
+        )
 
     if args.verbose:
         print('Evaluating CMC...')

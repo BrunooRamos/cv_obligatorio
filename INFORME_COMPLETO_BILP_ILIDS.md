@@ -755,10 +755,29 @@ docker run --rm --gpus all \
 - `data/features/ilidsvid_query_hog.npz`
 - `data/features/ilidsvid_gallery_hog.npz`
 
-**Dimensiones esperadas:**
+**Dimensiones obtenidas:**
 - Color: (300, 1632)
 - Texture: (300, 252)
-- **HOG: (300, ~3000-5000)** (depende del tamaño de imagen)
+- **HOG: (300, 768)** ✅
+
+**Total de dimensiones:** 2652 (1632 + 252 + 768)
+
+### Error Encontrado y Resuelto
+
+**Error durante extracción inicial:**
+```
+ValueError: The input image is too small given the values of
+pixels_per_cell and cells_per_block. It should have at least:
+16 rows and 16 cols.
+```
+
+**Causa:** Los últimos stripes horizontales eran demasiado pequeños para los parámetros HOG (8x8 cells, 2x2 blocks = mínimo 16x16 pixels).
+
+**Solución implementada en `bilp/hog.py` (líneas 39-77):**
+1. Verificar tamaño del stripe antes de extraer HOG
+2. Si es muy pequeño, ajustar automáticamente `pixels_per_cell`
+3. Si sigue fallando, retornar vector de zeros
+4. Esto permite procesar stripes de cualquier tamaño
 
 ---
 
@@ -801,8 +820,8 @@ docker run --rm --gpus all \
 | `data/features/ilidsvid_gallery_simple_norm.npz` | ~1.1 MB | Con L2 normalization |
 | `data/features/ilidsvid_query_no_norm.npz` | ~726 KB | Sin normalización final |
 | `data/features/ilidsvid_gallery_no_norm.npz` | ~1.1 MB | Sin normalización final |
-| `data/features/ilidsvid_query_hog.npz` | **~2-3 MB** | **Con HOG features** |
-| `data/features/ilidsvid_gallery_hog.npz` | **~4-5 MB** | **Con HOG features** |
+| `data/features/ilidsvid_query_hog.npz` | **1.2 MB** | **Con HOG features (768 dims)** ✅ |
+| `data/features/ilidsvid_gallery_hog.npz` | **1.2 MB** | **Con HOG features (768 dims)** ✅ |
 | `debug_output/` | ~5 MB | Visualizaciones y resultados de test_1.py (baseline) |
 | `debug_simple_norm/` | ~5 MB | Diagnóstico con L2 normalization |
 | `debug_no_norm/` | ~5 MB | Diagnóstico sin normalización |
