@@ -8,6 +8,7 @@ import os
 from typing import Tuple, Optional, Dict
 from .color import extract_color_features
 from .texture import extract_texture_features, build_gabor_bank
+from .hog import extract_hog_features
 from .gpu_utils import get_device
 
 
@@ -129,9 +130,11 @@ def extract_bilp_descriptor(
     n_stripes: int = 6,
     color_params: Optional[Dict] = None,
     texture_params: Optional[Dict] = None,
+    hog_params: Optional[Dict] = None,
     normalize: bool = True,
     normalize_method: str = 'l1',
-    device: Optional = None
+    device: Optional = None,
+    use_hog: bool = False
 ) -> Dict[str, np.ndarray]:
     """
     Extract complete BILP descriptor from image.
@@ -141,14 +144,17 @@ def extract_bilp_descriptor(
         n_stripes: Number of horizontal stripes
         color_params: Parameters for color feature extraction
         texture_params: Parameters for texture feature extraction
+        hog_params: Parameters for HOG feature extraction
         normalize: Whether to normalize features per stripe
         normalize_method: Normalization method ('l1', 'l2', 'power', 'l1_power')
         device: GPU device (CuPy) or None for CPU
+        use_hog: Whether to include HOG features
 
     Returns:
         Dictionary containing:
             - 'color': Color features
             - 'texture': Texture features
+            - 'hog': HOG features (if use_hog=True)
             - 'combined': Concatenated features (optional)
     """
     # Default parameters
@@ -169,6 +175,13 @@ def extract_bilp_descriptor(
             'n_orientations': 8
         }
 
+    if hog_params is None:
+        hog_params = {
+            'orientations': 8,
+            'pixels_per_cell': (8, 8),
+            'cells_per_block': (2, 2)
+        }
+
     # Extract color features
     color_features = extract_color_features(
         image,
@@ -184,12 +197,27 @@ def extract_bilp_descriptor(
         **texture_params
     )
 
+    # Extract HOG features if requested
+    result = {
+        'color': color_features,
+        'texture': texture_features,
+        'n_stripes': n_stripes
+    }
+
+    if use_hog:
+        hog_features = extract_hog_features(
+            image,
+            n_stripes=n_stripes,
+            **hog_params
+        )
+        result['hog'] = hog_features
+
     # Normalize per stripe if requested
     if normalize:
         # Color: 16*16 + 16 = 272 per stripe
         color_per_stripe = color_params['n_bins_uv']**2 + color_params['n_bins_lum']
-        color_features = normalize_per_stripe(
-            color_features,
+        result['color'] = normalize_per_stripe(
+            result['color'],
             n_stripes,
             color_per_stripe,
             normalize_method
@@ -198,18 +226,26 @@ def extract_bilp_descriptor(
         # Texture: n_scales * n_orientations + 2 per stripe
         texture_per_stripe = (texture_params['n_scales'] *
                              texture_params['n_orientations'] + 2)
-        texture_features = normalize_per_stripe(
-            texture_features,
+        result['texture'] = normalize_per_stripe(
+            result['texture'],
             n_stripes,
             texture_per_stripe,
             normalize_method
         )
 
-    return {
-        'color': color_features,
-        'texture': texture_features,
-        'n_stripes': n_stripes
-    }
+        # HOG: normalize per stripe (HOG features per stripe vary based on image size)
+        if use_hog:
+            # Estimate HOG features per stripe (will be auto-computed)
+            hog_total_dim = len(result['hog'])
+            hog_per_stripe = hog_total_dim // n_stripes
+            result['hog'] = normalize_per_stripe(
+                result['hog'],
+                n_stripes,
+                hog_per_stripe,
+                normalize_method
+            )
+
+    return result
 
 
 def extract_bilp_batch(
@@ -217,11 +253,13 @@ def extract_bilp_batch(
     n_stripes: int = 6,
     color_params: Optional[Dict] = None,
     texture_params: Optional[Dict] = None,
+    hog_params: Optional[Dict] = None,
     normalize: bool = True,
     normalize_method: str = 'l1',
     verbose: bool = False,
-    use_gpu: bool = False
-) -> Tuple[np.ndarray, np.ndarray]:
+    use_gpu: bool = False,
+    use_hog: bool = False
+) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
     """
     Extract BILP descriptors from batch of images.
 
@@ -230,14 +268,17 @@ def extract_bilp_batch(
         n_stripes: Number of horizontal stripes
         color_params: Parameters for color feature extraction
         texture_params: Parameters for texture feature extraction
+        hog_params: Parameters for HOG feature extraction
         normalize: Whether to normalize features per stripe
         normalize_method: Normalization method
         verbose: Print progress
         use_gpu: Whether to use GPU if available
+        use_hog: Whether to extract HOG features
 
     Returns:
         color_features: (n_images, color_dim)
         texture_features: (n_images, texture_dim)
+        hog_features: (n_images, hog_dim) or None
     """
     # Get GPU device if requested
     is_gpu, device = get_device(use_gpu)
@@ -245,9 +286,10 @@ def extract_bilp_batch(
         print(f"Using GPU for feature extraction")
     elif use_gpu and not is_gpu and verbose:
         print(f"GPU requested but not available, using CPU")
-    
+
     color_features_list = []
     texture_features_list = []
+    hog_features_list = [] if use_hog else None
 
     for i, image in enumerate(images):
         if verbose and (i + 1) % 100 == 0:
@@ -258,18 +300,23 @@ def extract_bilp_batch(
             n_stripes=n_stripes,
             color_params=color_params,
             texture_params=texture_params,
+            hog_params=hog_params,
             normalize=normalize,
             normalize_method=normalize_method,
-            device=device
+            device=device,
+            use_hog=use_hog
         )
 
         color_features_list.append(descriptor['color'])
         texture_features_list.append(descriptor['texture'])
+        if use_hog:
+            hog_features_list.append(descriptor['hog'])
 
     color_features = np.array(color_features_list)
     texture_features = np.array(texture_features_list)
+    hog_features = np.array(hog_features_list) if use_hog else None
 
-    return color_features, texture_features
+    return color_features, texture_features, hog_features
 
 
 def compute_feature_stats(features: np.ndarray) -> Dict[str, float]:
@@ -296,6 +343,7 @@ def save_features(
     filepath: str,
     color_features: np.ndarray,
     texture_features: np.ndarray,
+    hog_features: Optional[np.ndarray] = None,
     metadata: Optional[Dict] = None
 ):
     """
@@ -305,6 +353,7 @@ def save_features(
         filepath: Path to save file (.npz)
         color_features: Color feature matrix
         texture_features: Texture feature matrix
+        hog_features: HOG feature matrix (optional)
         metadata: Optional metadata dictionary
     """
     save_dict = {
@@ -312,13 +361,16 @@ def save_features(
         'texture': texture_features
     }
 
+    if hog_features is not None:
+        save_dict['hog'] = hog_features
+
     if metadata is not None:
         save_dict['metadata'] = metadata
 
     np.savez_compressed(filepath, **save_dict)
 
 
-def load_features(filepath: str) -> Tuple[np.ndarray, np.ndarray, Optional[Dict]]:
+def load_features(filepath: str) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray], Optional[Dict]]:
     """
     Load extracted features from file.
 
@@ -326,15 +378,16 @@ def load_features(filepath: str) -> Tuple[np.ndarray, np.ndarray, Optional[Dict]
         filepath: Path to .npz file
 
     Returns:
-        color_features, texture_features, metadata
+        color_features, texture_features, hog_features, metadata
     """
     data = np.load(filepath, allow_pickle=True)
 
     color_features = data['color']
     texture_features = data['texture']
+    hog_features = data.get('hog', None)
     metadata = data.get('metadata', None)
 
     if metadata is not None:
         metadata = metadata.item()  # Convert numpy array to dict
 
-    return color_features, texture_features, metadata
+    return color_features, texture_features, hog_features, metadata

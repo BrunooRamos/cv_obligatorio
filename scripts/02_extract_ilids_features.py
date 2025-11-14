@@ -97,6 +97,11 @@ def parse_args() -> argparse.Namespace:
         action='store_true',
         help='Use GPU for feature extraction if available (requires CuPy).',
     )
+    parser.add_argument(
+        '--use-hog',
+        action='store_true',
+        help='Extract HOG features in addition to color and texture.',
+    )
     return parser.parse_args()
 
 
@@ -110,26 +115,31 @@ def aggregate_sequence_features(
     n_stripes: int,
     color_params: Dict,
     texture_params: Dict,
+    hog_params: Dict,
     normalize_method: str,
     use_gpu: bool = False,
     normalize_final: bool = True,
-) -> Tuple[np.ndarray, np.ndarray]:
+    use_hog: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     # SIMPLIFIED NORMALIZATION: Do NOT normalize per stripe
     # Only normalize once at the end after averaging frames
-    color_batch, texture_batch = extract_bilp_batch(
+    color_batch, texture_batch, hog_batch = extract_bilp_batch(
         frames,
         n_stripes=n_stripes,
         color_params=color_params,
         texture_params=texture_params,
+        hog_params=hog_params,
         normalize=False,  # CHANGED: No per-stripe normalization
         normalize_method=normalize_method,
         verbose=False,
         use_gpu=use_gpu,
+        use_hog=use_hog,
     )
 
     # Average across frames
     color_mean = np.mean(color_batch, axis=0)
     texture_mean = np.mean(texture_batch, axis=0)
+    hog_mean = np.mean(hog_batch, axis=0) if use_hog else np.array([], dtype=np.float32)
 
     # Single L2 normalization at the end (more gentle than L1)
     if normalize_final:
@@ -139,11 +149,17 @@ def aggregate_sequence_features(
 
         texture_norm = np.linalg.norm(texture_mean) + 1e-12
         texture_mean = (texture_mean / texture_norm).astype(np.float32)
+
+        if use_hog and len(hog_mean) > 0:
+            hog_norm = np.linalg.norm(hog_mean) + 1e-12
+            hog_mean = (hog_mean / hog_norm).astype(np.float32)
     else:
         color_mean = color_mean.astype(np.float32)
         texture_mean = texture_mean.astype(np.float32)
+        if use_hog:
+            hog_mean = hog_mean.astype(np.float32)
 
-    return color_mean, texture_mean
+    return color_mean, texture_mean, hog_mean
 
 
 def process_sequences(
@@ -152,13 +168,16 @@ def process_sequences(
     n_stripes: int,
     color_params: Dict,
     texture_params: Dict,
+    hog_params: Dict,
     normalize_method: str,
     normalize_final: bool,
     verbose: bool,
     use_gpu: bool = False,
-) -> Tuple[np.ndarray, np.ndarray, Dict[str, List]]:
+    use_hog: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, List]]:
     color_features: List[np.ndarray] = []
     texture_features: List[np.ndarray] = []
+    hog_features: List[np.ndarray] = []
     metadata: Dict[str, List] = {
         'dataset': 'iLIDS-VID',
         'camera_id': camera_id,
@@ -180,18 +199,22 @@ def process_sequences(
                 print(f"Skipping sequence without frames: person {sequence['person_id']} cam {sequence['camera_id']}")
             continue
 
-        color_vec, texture_vec = aggregate_sequence_features(
+        color_vec, texture_vec, hog_vec = aggregate_sequence_features(
             frames,
             n_stripes=n_stripes,
             color_params=color_params,
             texture_params=texture_params,
+            hog_params=hog_params,
             normalize_method=normalize_method,
             use_gpu=use_gpu,
             normalize_final=normalize_final,
+            use_hog=use_hog,
         )
 
         color_features.append(color_vec)
         texture_features.append(texture_vec)
+        if use_hog:
+            hog_features.append(hog_vec)
 
         metadata['person_ids'].append(int(sequence['person_id']))
         metadata['camera_ids'].append(int(sequence['camera_id']))
@@ -211,8 +234,9 @@ def process_sequences(
 
     color_matrix = np.vstack(color_features)
     texture_matrix = np.vstack(texture_features)
+    hog_matrix = np.vstack(hog_features) if use_hog and hog_features else np.array([])
 
-    return color_matrix, texture_matrix, metadata
+    return color_matrix, texture_matrix, hog_matrix, metadata
 
 
 def main() -> None:
@@ -255,29 +279,38 @@ def main() -> None:
         'n_scales': 5,
         'n_orientations': 8,
     }
+    hog_params = {
+        'orientations': 8,
+        'pixels_per_cell': (8, 8),
+        'cells_per_block': (2, 2),
+    }
 
-    color_query, texture_query, meta_query = process_sequences(
+    color_query, texture_query, hog_query, meta_query = process_sequences(
         cam1_sequences,
         camera_id=1,
         n_stripes=args.n_stripes,
         color_params=color_params,
         texture_params=texture_params,
+        hog_params=hog_params,
         normalize_method=args.normalize_method,
         normalize_final=args.normalize_final,
         verbose=args.verbose,
         use_gpu=args.use_gpu,
+        use_hog=args.use_hog,
     )
 
-    color_gallery, texture_gallery, meta_gallery = process_sequences(
+    color_gallery, texture_gallery, hog_gallery, meta_gallery = process_sequences(
         cam2_sequences,
         camera_id=2,
         n_stripes=args.n_stripes,
         color_params=color_params,
         texture_params=texture_params,
+        hog_params=hog_params,
         normalize_method=args.normalize_method,
         normalize_final=args.normalize_final,
         verbose=args.verbose,
         use_gpu=args.use_gpu,
+        use_hog=args.use_hog,
     )
 
     meta_query.update({
@@ -287,6 +320,7 @@ def main() -> None:
         'sampling_strategy': args.sampling_strategy,
         'num_sampled_frames': args.num_frames,
         'calibration_file': os.path.abspath(args.calibration_file),
+        'use_hog': args.use_hog,
     })
 
     meta_gallery.update({
@@ -296,6 +330,7 @@ def main() -> None:
         'sampling_strategy': args.sampling_strategy,
         'num_sampled_frames': args.num_frames,
         'calibration_file': os.path.abspath(args.calibration_file),
+        'use_hog': args.use_hog,
     })
 
     query_path = os.path.join(args.output_dir, args.query_filename)
@@ -310,11 +345,18 @@ def main() -> None:
     if args.verbose:
         print("Saving features to disk...")
 
-    save_features(query_path, color_query, texture_query, meta_query)
-    save_features(gallery_path, color_gallery, texture_gallery, meta_gallery)
+    hog_query_to_save = hog_query if args.use_hog and len(hog_query) > 0 else None
+    hog_gallery_to_save = hog_gallery if args.use_hog and len(hog_gallery) > 0 else None
 
-    print(f"Saved query features to {query_path} (shape: {color_query.shape}, {texture_query.shape})")
-    print(f"Saved gallery features to {gallery_path} (shape: {color_gallery.shape}, {texture_gallery.shape})")
+    save_features(query_path, color_query, texture_query, hog_query_to_save, meta_query)
+    save_features(gallery_path, color_gallery, texture_gallery, hog_gallery_to_save, meta_gallery)
+
+    if args.use_hog:
+        print(f"Saved query features to {query_path} (shape: color={color_query.shape}, texture={texture_query.shape}, hog={hog_query.shape})")
+        print(f"Saved gallery features to {gallery_path} (shape: color={color_gallery.shape}, texture={texture_gallery.shape}, hog={hog_gallery.shape})")
+    else:
+        print(f"Saved query features to {query_path} (shape: color={color_query.shape}, texture={texture_query.shape})")
+        print(f"Saved gallery features to {gallery_path} (shape: color={color_gallery.shape}, texture={texture_gallery.shape})")
 
 
 if __name__ == '__main__':
