@@ -36,16 +36,43 @@ def extract_hog_stripe(
     else:
         gray_stripe = image_stripe
 
-    # Extract HOG features
-    hog_features = hog(
-        gray_stripe,
-        orientations=orientations,
-        pixels_per_cell=pixels_per_cell,
-        cells_per_block=cells_per_block,
-        visualize=visualize,
-        feature_vector=True,
-        channel_axis=None
-    )
+    # Check if stripe is large enough for HOG
+    min_height = pixels_per_cell[0] * cells_per_block[0]
+    min_width = pixels_per_cell[1] * cells_per_block[1]
+
+    if gray_stripe.shape[0] < min_height or gray_stripe.shape[1] < min_width:
+        # Stripe too small - use smaller parameters or return zeros
+        # Option 1: Adjust pixels_per_cell to fit the stripe
+        adjusted_cell_h = max(1, gray_stripe.shape[0] // (cells_per_block[0] + 1))
+        adjusted_cell_w = max(1, gray_stripe.shape[1] // (cells_per_block[1] + 1))
+        adjusted_pixels_per_cell = (adjusted_cell_h, adjusted_cell_w)
+
+        # Try with adjusted parameters
+        try:
+            hog_features = hog(
+                gray_stripe,
+                orientations=orientations,
+                pixels_per_cell=adjusted_pixels_per_cell,
+                cells_per_block=cells_per_block,
+                visualize=visualize,
+                feature_vector=True,
+                channel_axis=None
+            )
+        except:
+            # If still fails, return zeros with expected dimensionality
+            # Rough estimate: orientations * cells_per_block[0] * cells_per_block[1]
+            hog_features = np.zeros(orientations * cells_per_block[0] * cells_per_block[1], dtype=np.float32)
+    else:
+        # Extract HOG features normally
+        hog_features = hog(
+            gray_stripe,
+            orientations=orientations,
+            pixels_per_cell=pixels_per_cell,
+            cells_per_block=cells_per_block,
+            visualize=visualize,
+            feature_vector=True,
+            channel_axis=None
+        )
 
     return hog_features.astype(np.float32)
 
