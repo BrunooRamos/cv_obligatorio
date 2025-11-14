@@ -21,8 +21,6 @@ from .distance import (
     bilp_distance,
     compute_distance_matrix,
     compute_distance_matrix_fast,
-    rank_gallery,
-    compute_ap
 )
 from .utils import (
     normalize_l1,

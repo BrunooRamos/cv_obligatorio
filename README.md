@@ -205,8 +205,6 @@ Cálculo de distancias BILP:
 - **`bilp_distance()`**: d = α·d_tex + (1-α)·d_col
 - **`compute_distance_matrix_fast()`**: Matriz de distancias optimizada con scipy
 - **`l1_distance(), l2_distance(), chi_square_distance()`**: Métricas de distancia
-- **`rank_gallery()`**: Ranking de galería para una query
-- **`compute_ap()`**: Average Precision para Market-1501
 
 Soporta múltiples métricas: L1 (cityblock), L2 (euclidean), Chi-square, Bhattacharyya
 

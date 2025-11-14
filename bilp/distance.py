@@ -1,5 +1,8 @@
 """
-Distance computation for BILP features
+Distance computation for BILP features.
+
+By default, we decided to use the L1 distance as it is more robust to outliers and noise.
+We also tried l2 distance, chi2 distance, and bhattacharyya distance.
 """
 
 import numpy as np
@@ -7,8 +10,7 @@ from typing import Optional, Union
 from scipy.spatial.distance import cdist
 from .gpu_utils import cdist_gpu
 
-
-def l1_distance(x: np.ndarray, y: np.ndarray) -> float:
+def _l1_distance(x: np.ndarray, y: np.ndarray) -> float:
     """
     Compute L1 (Manhattan) distance between two vectors.
 
@@ -21,7 +23,7 @@ def l1_distance(x: np.ndarray, y: np.ndarray) -> float:
     return np.sum(np.abs(x - y))
 
 
-def l2_distance(x: np.ndarray, y: np.ndarray) -> float:
+def _l2_distance(x: np.ndarray, y: np.ndarray) -> float:
     """
     Compute L2 (Euclidean) distance between two vectors.
 
@@ -34,7 +36,7 @@ def l2_distance(x: np.ndarray, y: np.ndarray) -> float:
     return np.sqrt(np.sum((x - y) ** 2))
 
 
-def chi_square_distance(x: np.ndarray, y: np.ndarray, epsilon: float = 1e-10) -> float:
+def _chi_square_distance(x: np.ndarray, y: np.ndarray, epsilon: float = 1e-10) -> float:
     """
     Compute Chi-square distance between two histograms.
 
@@ -50,7 +52,7 @@ def chi_square_distance(x: np.ndarray, y: np.ndarray, epsilon: float = 1e-10) ->
     return np.sum(numerator / denominator)
 
 
-def bhattacharyya_distance(x: np.ndarray, y: np.ndarray, epsilon: float = 1e-10) -> float:
+def _bhattacharyya_distance(x: np.ndarray, y: np.ndarray, epsilon: float = 1e-10) -> float:
     """
     Compute Bhattacharyya distance between two histograms.
 
@@ -61,7 +63,7 @@ def bhattacharyya_distance(x: np.ndarray, y: np.ndarray, epsilon: float = 1e-10)
     Returns:
         Bhattacharyya distance
     """
-    bc = np.sum(np.sqrt(x * y + epsilon))  # Bhattacharyya coefficient
+    bc = np.sum(np.sqrt(x * y + epsilon))  
     return -np.log(bc + epsilon)
 
 
@@ -91,13 +93,13 @@ def bilp_distance(
     """
     # Select distance function
     if metric == 'l1':
-        dist_fn = l1_distance
+        dist_fn = _l1_distance
     elif metric == 'l2':
-        dist_fn = l2_distance
+        dist_fn = _l2_distance
     elif metric == 'chi2':
-        dist_fn = chi_square_distance
+        dist_fn = _chi_square_distance
     elif metric == 'bhattacharyya':
-        dist_fn = bhattacharyya_distance
+        dist_fn = _bhattacharyya_distance
     else:
         raise ValueError(f"Unknown metric: {metric}")
 
@@ -255,111 +257,12 @@ def compute_pairwise_distances_per_stripe(
             for i in range(n_query):
                 for j in range(n_gallery):
                     if metric == 'chi2':
-                        dist_tensor[i, j, s] = chi_square_distance(
+                        dist_tensor[i, j, s] = _chi_square_distance(
                             query_stripe[i], gallery_stripe[j]
                         )
                     elif metric == 'bhattacharyya':
-                        dist_tensor[i, j, s] = bhattacharyya_distance(
+                        dist_tensor[i, j, s] = _bhattacharyya_distance(
                             query_stripe[i], gallery_stripe[j]
                         )
 
     return dist_tensor
-
-
-def rank_gallery(
-    distance_vector: np.ndarray,
-    gallery_ids: np.ndarray,
-    query_id: int,
-    query_cam: Optional[int] = None,
-    gallery_cams: Optional[np.ndarray] = None,
-    remove_same_cam: bool = True
-) -> np.ndarray:
-    """
-    Rank gallery images for a single query.
-
-    Args:
-        distance_vector: Distances to all gallery images (n_gallery,)
-        gallery_ids: Person IDs for gallery images
-        query_id: Person ID of query
-        query_cam: Camera ID of query (optional)
-        gallery_cams: Camera IDs for gallery images (optional)
-        remove_same_cam: Remove same camera images (for Market-1501)
-
-    Returns:
-        Ranked indices (sorted by distance)
-    """
-    # Create mask for valid gallery images
-    valid_mask = np.ones(len(distance_vector), dtype=bool)
-
-    # Remove same ID images (if any in gallery)
-    # Actually, for evaluation we keep them but mark them
-
-    # Remove same camera images if requested
-    if remove_same_cam and query_cam is not None and gallery_cams is not None:
-        same_cam_mask = (gallery_cams == query_cam)
-        same_id_same_cam = same_cam_mask & (gallery_ids == query_id)
-        valid_mask &= ~same_id_same_cam
-
-    # Get valid distances
-    valid_distances = distance_vector.copy()
-    valid_distances[~valid_mask] = np.inf
-
-    # Sort by distance
-    ranked_indices = np.argsort(valid_distances)
-
-    return ranked_indices
-
-
-def compute_ap(
-    distance_vector: np.ndarray,
-    gallery_ids: np.ndarray,
-    query_id: int,
-    query_cam: Optional[int] = None,
-    gallery_cams: Optional[np.ndarray] = None
-) -> float:
-    """
-    Compute Average Precision for a single query.
-
-    Args:
-        distance_vector: Distances to all gallery images
-        gallery_ids: Person IDs for gallery images
-        query_id: Person ID of query
-        query_cam: Camera ID of query
-        gallery_cams: Camera IDs for gallery images
-
-    Returns:
-        Average Precision
-    """
-    # Rank gallery
-    ranked_indices = rank_gallery(
-        distance_vector,
-        gallery_ids,
-        query_id,
-        query_cam,
-        gallery_cams,
-        remove_same_cam=True
-    )
-
-    # Find matches
-    matches = (gallery_ids[ranked_indices] == query_id)
-
-    # Remove same camera matches (junk images)
-    if query_cam is not None and gallery_cams is not None:
-        same_cam = (gallery_cams[ranked_indices] == query_cam)
-        matches = matches & ~same_cam
-
-    # Compute AP
-    if not np.any(matches):
-        return 0.0
-
-    # Cumulative precision at each recall point
-    cum_tp = np.cumsum(matches)
-    cum_fp = np.cumsum(~matches)
-
-    recall = cum_tp / np.sum(matches)
-    precision = cum_tp / (cum_tp + cum_fp)
-
-    # Average precision
-    ap = np.sum(precision[matches]) / np.sum(matches)
-
-    return float(ap)
